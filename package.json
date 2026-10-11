@@ -2,7 +2,7 @@
   "name": "saugi",
   "version": "1.0.0",
   "private": true,
-  "description": "Roscoe: schnelle Roborock-Steuerung als PWA – Start, Pause, nach Hause, Live-Karte. Cloudflare Pages.",
+  "description": "Roscoe: a fast Roborock vacuum remote as a PWA - start, pause, go home, live map. Cloudflare Pages.",
   "license": "MIT",
   "type": "module",
   "scripts": {
