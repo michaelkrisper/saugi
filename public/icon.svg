@@ -1,7 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="#111418"/>
-  <circle cx="256" cy="256" r="170" fill="#4f9dff"/>
-  <circle cx="256" cy="256" r="120" fill="#1b2027"/>
-  <circle cx="256" cy="256" r="46" fill="#4f9dff"/>
-  <rect x="226" y="86" width="60" height="40" rx="14" fill="#1b2027"/>
+  <!-- handle and cloth dust bag, tilted back like an upright in use -->
+  <g transform="rotate(-12 256 352)">
+    <rect x="246" y="60" width="20" height="280" rx="8" fill="#9aa4b1"/>
+    <rect x="208" y="46" width="96" height="30" rx="15" fill="#c9d1d9"/>
+    <path d="M256 104 C 312 104 324 142 324 202 L 324 292 C 324 322 294 336 256 336 C 218 336 188 322 188 292 L 188 202 C 188 142 200 104 256 104 Z" fill="#e8dcc4"/>
+    <path d="M196 164 H 316 M194 228 H 318 M194 288 H 318" stroke="#c7b896" stroke-width="7" stroke-linecap="round"/>
+    <rect x="230" y="96" width="52" height="20" rx="8" fill="#9aa4b1"/>
+  </g>
+  <!-- motor hood with headlight -->
+  <path d="M136 410 C 136 354 190 328 256 328 C 322 328 376 354 376 410 Z" fill="#4f9dff"/>
+  <path d="M166 376 C 184 354 216 344 256 344" stroke="#8fc0ff" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <circle cx="154" cy="392" r="14" fill="#ffd36b"/>
+  <!-- base and wheels -->
+  <rect x="118" y="402" width="276" height="26" rx="13" fill="#2c333d"/>
+  <circle cx="166" cy="432" r="24" fill="#1b2027" stroke="#9aa4b1" stroke-width="8"/>
+  <circle cx="346" cy="432" r="24" fill="#1b2027" stroke="#9aa4b1" stroke-width="8"/>
 </svg>
