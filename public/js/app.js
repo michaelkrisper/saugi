@@ -121,9 +121,8 @@ function render() {
   $('stats').textContent = stats.join('   ');
 
   const moving = s && (CLEANING.has(s.state) || RETURNING.has(s.state));
-  const resumable = s && (s.state === 10 || (s.in_cleaning > 0 && !moving));
   const main = $('main');
-  main.innerHTML = moving ? `${ICON.pause}Pause` : `${ICON.play}${resumable ? 'Fortsetzen' : 'Starten'}`;
+  main.innerHTML = moving ? `${ICON.pause}Pause` : `${ICON.play}Start`;
   main.dataset.action = moving ? 'pause' : 'start';
   main.disabled = !online || busy;
   $('home').disabled = !online || busy || RETURNING.has(s.state) || DOCKED.has(s.state);

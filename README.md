@@ -12,7 +12,7 @@ with position, path and restricted zones.
 **→ [saugi.pages.dev](https://saugi.pages.dev)**
 
 <p align="center">
-  <img src="docs/screenshot.png" width="340" alt="Main screen: status 'Saugt' (cleaning), 76 % battery, 12.3 m² in 14 minutes, below it the map with coloured rooms, the cleaning path, the robot, the dock, a no-go zone and a no-mop zone, and at the bottom the Pause and Nach Hause (go home) buttons">
+  <img src="docs/screenshot.png" width="340" alt="Main screen: status 'Saugt' (cleaning), 76 % battery, 12.3 m² in 14 minutes, below it the map with coloured rooms, the cleaning path, the robot, the dock, a no-go zone and a no-mop zone, and at the bottom the Pause and Home buttons">
 </p>
 
 ## Features
