@@ -5,6 +5,8 @@ const CHARGER = 1;
 const IMAGE = 2;
 const PATH = 3;
 const ROBOT = 8;
+// Block type -> [field, coordinates per shape]: areas are 4 corners, walls 2 ends.
+const SHAPES = { 9: ['noGo', 8], 10: ['walls', 4], 12: ['noMop', 8] };
 
 const u16 = (b, o) => b[o] | (b[o + 1] << 8);
 const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
@@ -20,8 +22,15 @@ function position(data, len) {
   return p;
 }
 
+function shapes(raw, pos, data, coords) {
+  const count = u16(raw, pos + 8);
+  return Array.from({ length: count }, (_, i) =>
+    Array.from({ length: coords }, (_, j) => u16(data, (i * coords + j) * 2)),
+  );
+}
+
 export function parseMap(raw) {
-  const map = { path: [], robot: null, charger: null, image: null };
+  const map = { path: [], robot: null, charger: null, image: null, noGo: [], walls: [], noMop: [] };
   let pos = u16(raw, 2);
   while (pos < raw.length) {
     const type = u16(raw, pos);
@@ -31,6 +40,7 @@ export function parseMap(raw) {
     const data = raw.subarray(start, start + dataLen);
     if (type === CHARGER) map.charger = position(data, dataLen);
     else if (type === ROBOT) map.robot = position(data, dataLen);
+    else if (SHAPES[type]) map[SHAPES[type][0]] = shapes(raw, pos, data, SHAPES[type][1]);
     else if (type === PATH) {
       const pts = new Uint16Array(dataLen / 2);
       for (let i = 0; i < pts.length; i++) pts[i] = u16(raw, pos + 0x14 + i * 2);

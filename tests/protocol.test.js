@@ -106,3 +106,10 @@ test('hawk header matches python', async () => {
   const h = V.hawk;
   assert.equal(await hawk(h.rriot, h.path, 1700000000, 'NONCE123'), h.auth);
 });
+
+test('no-go zones, no-mop zones and virtual walls parse like python', () => {
+  const m = parseMap(new Uint8Array(readFileSync(new URL('fixtures/s5-zones.bin', import.meta.url))));
+  const e = JSON.parse(readFileSync(new URL('fixtures/zones.json', import.meta.url)));
+  assert.ok(e.noGo.length && e.walls.length, 'fixture has zones and walls');
+  assert.deepEqual({ noGo: m.noGo, noMop: m.noMop, walls: m.walls }, e);
+});

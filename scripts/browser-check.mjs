@@ -84,7 +84,9 @@ try {
     throw new Error('login screen not shown');
   await shot('saugi-login');
 
-  const map = readFileSync(new URL('../tests/fixtures/s6.bin', import.meta.url)).toString('base64');
+  const map = readFileSync(new URL(process.env.MAP ?? '../tests/fixtures/s6.bin', import.meta.url)).toString(
+    'base64',
+  );
   await evaluate(`(async () => {
     localStorage.setItem('saugi', JSON.stringify({
       userData: { rriot: { u: 'u', s: 's', h: 'h', k: 'k', r: { a: 'https://api-eu.roborock.com', m: 'ssl://mqtt-eu-3.roborock.com:8883' } } },

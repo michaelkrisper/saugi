@@ -129,6 +129,35 @@ function render() {
   $('home').disabled = !online || busy || RETURNING.has(s.state) || DOCKED.has(s.state);
 }
 
+// No-go zones red, no-mop zones purple, virtual walls as red lines.
+function drawZones(ctx, P) {
+  const poly = (pts) => {
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i += 2) ctx.lineTo(...P(pts[i], pts[i + 1]));
+  };
+  ctx.lineWidth = 2;
+  for (const [zones, fill, stroke] of [
+    [map.noGo, 'rgba(255,93,93,.28)', '#ff5d5d'],
+    [map.noMop, 'rgba(176,120,255,.28)', '#b078ff'],
+  ]) {
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    for (const z of zones) {
+      poly(z);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.strokeStyle = '#ff5d5d';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (const w of map.walls) {
+    poly(w);
+    ctx.stroke();
+  }
+}
+
 function draw() {
   const canvas = $('map');
   const dpr = window.devicePixelRatio || 1;
@@ -152,6 +181,8 @@ function draw() {
     const [px, py] = toPixel(map.image, x, y);
     return [(px - bitmap.ox + 0.5) * s + offX, (py - bitmap.oy + 0.5) * s + offY];
   };
+
+  drawZones(ctx, P);
 
   ctx.font = '600 12px system-ui, sans-serif';
   ctx.textAlign = 'center';
@@ -285,6 +316,7 @@ async function connect() {
     await poll();
     loadRoomNames();
   } catch (err) {
+    robot.close();
     render();
     if (/refused/.test(err.message)) {
       banner('Anmeldung abgelaufen. Tippe auf den Gerätenamen, um dich neu anzumelden.');
@@ -369,6 +401,17 @@ window.saugi = {
   },
 };
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+// iOS Safari ignores user-scalable=no; block its pinch gestures directly.
+for (const type of ['gesturestart', 'gesturechange'])
+  document.addEventListener(type, (e) => e.preventDefault());
+document.addEventListener('touchmove', (e) => e.touches.length > 1 && e.preventDefault(), { passive: false });
+
+if ('serviceWorker' in navigator) {
+  // A new deploy installs a new worker; reload once so it shows right away.
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
+  }
+  navigator.serviceWorker.register('/sw.js');
+}
 if (cfg?.device) showApp();
 else showLogin();
