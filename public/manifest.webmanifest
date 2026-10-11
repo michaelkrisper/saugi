@@ -2,7 +2,7 @@
   "name": "Roscoe",
   "short_name": "Roscoe",
   "description": "Roborock remote: start, pause, go home, live map",
-  "lang": "de",
+  "lang": "en",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

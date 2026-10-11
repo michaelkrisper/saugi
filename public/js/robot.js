@@ -61,7 +61,7 @@ export class Robot {
     const result = new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error('Sauger antwortet nicht'));
+        reject(new Error('The vacuum is not responding'));
       }, TIMEOUT_MS);
       this.pending.set(id, {
         resolve: (v) => {

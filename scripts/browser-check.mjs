@@ -94,7 +94,7 @@ try {
       rooms: {},
     }));
     localStorage.setItem('saugi.status', JSON.stringify({ state: 5, battery: 76, clean_area: 12300000, clean_time: 840, in_cleaning: 1 }));
-    localStorage.setItem('saugi.roomNames', JSON.stringify({ 16: 'Küche', 17: 'Wohnzimmer', 18: 'Bad', 19: 'Flur', 20: 'Schlafzimmer', 21: 'Büro' }));
+    localStorage.setItem('saugi.roomNames', JSON.stringify({ 16: 'Kitchen', 17: 'Living room', 18: 'Bath', 19: 'Hall', 20: 'Bedroom', 21: 'Office' }));
     const bytes = Uint8Array.from(atob('${map}'), (c) => c.charCodeAt(0));
     await (await caches.open('saugi-data')).put('/last-map', new Response(bytes));
   })()`);
@@ -106,7 +106,7 @@ try {
   console.info(state);
   await shot('saugi-main');
   if (!state.mapShown) throw new Error('cached map was not drawn');
-  if (!/Anmeldung abgelaufen/.test(state.banner))
+  if (!/Sign-in expired/.test(state.banner))
     throw new Error(`expected broker to reject fake login, got: ${state.banner}`);
 } finally {
   ws?.close();

@@ -28,20 +28,20 @@ async function call(url, { method = 'POST', params, form, headers = {} } = {}) {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error(`Roborock-API antwortet unerwartet (${res.status})`);
+    throw new Error(`Unexpected response from the Roborock API (${res.status})`);
   }
 }
 
 const ERRORS = {
-  2008: 'Für diese E-Mail gibt es kein Roborock-Konto.',
-  2018: 'Der Code ist falsch oder abgelaufen.',
-  3009: 'Bitte zuerst in der Roborock-App die Nutzungsbedingungen akzeptieren.',
-  3006: 'Bitte in der Roborock-App die Nutzungsbedingungen erneut akzeptieren.',
-  9002: 'Zu viele Code-Anfragen. Bitte später nochmal.',
+  2008: 'There is no Roborock account for this e-mail.',
+  2018: 'The code is wrong or has expired.',
+  3009: 'Please accept the terms of use in the Roborock app first.',
+  3006: 'Please accept the terms of use in the Roborock app again.',
+  9002: 'Too many code requests. Please try again later.',
 };
 
 function check(res) {
-  if (res?.code !== 200) throw new Error(ERRORS[res?.code] ?? `${res?.msg ?? 'Fehler'} (Code ${res?.code})`);
+  if (res?.code !== 200) throw new Error(ERRORS[res?.code] ?? `${res?.msg ?? 'Error'} (Code ${res?.code})`);
   return res.data;
 }
 
@@ -136,6 +136,6 @@ export async function fetchHome(baseUrl, userData) {
     method: 'GET',
     headers: { Authorization: await hawk(userData.rriot, path) },
   });
-  if (!res.success) throw new Error(`Gerätedaten nicht abrufbar: ${res.msg ?? JSON.stringify(res)}`);
+  if (!res.success) throw new Error(`Could not load devices: ${res.msg ?? JSON.stringify(res)}`);
   return res.result;
 }

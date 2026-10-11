@@ -2,31 +2,31 @@ import { parseMap, rasterize, toPixel } from './map.js';
 import { Robot } from './robot.js';
 
 const STATES = {
-  1: 'Startet',
-  2: 'Vom Dock getrennt',
-  3: 'Bereit',
-  4: 'Fernsteuerung',
-  5: 'Saugt',
-  6: 'Fährt nach Hause',
-  7: 'Manuell',
-  8: 'Lädt',
-  9: 'Ladeproblem',
-  10: 'Pausiert',
-  11: 'Punktreinigung',
-  12: 'Fehler',
-  13: 'Fährt herunter',
-  14: 'Update',
-  15: 'Dockt an',
-  16: 'Fährt zum Ziel',
-  17: 'Zonenreinigung',
-  18: 'Raumreinigung',
-  22: 'Entleert Behälter',
-  23: 'Wäscht Mopp',
-  26: 'Fährt zur Moppwäsche',
-  29: 'Kartiert',
-  100: 'Voll geladen',
+  1: 'Starting',
+  2: 'Off the dock',
+  3: 'Idle',
+  4: 'Remote control',
+  5: 'Cleaning',
+  6: 'Returning home',
+  7: 'Manual mode',
+  8: 'Charging',
+  9: 'Charging problem',
+  10: 'Paused',
+  11: 'Spot cleaning',
+  12: 'Error',
+  13: 'Shutting down',
+  14: 'Updating',
+  15: 'Docking',
+  16: 'Going to target',
+  17: 'Zone cleaning',
+  18: 'Room cleaning',
+  22: 'Emptying bin',
+  23: 'Washing mop',
+  26: 'Going to wash mop',
+  29: 'Mapping',
+  100: 'Fully charged',
   101: 'Offline',
-  103: 'Gesperrt',
+  103: 'Locked',
 };
 const CLEANING = new Set([1, 4, 5, 7, 11, 16, 17, 18, 29]);
 const RETURNING = new Set([6, 15, 26]);
@@ -73,8 +73,8 @@ async function showLogin() {
         $('email').disabled = true;
         $('code').hidden = false;
         $('code').focus();
-        $('login-hint').textContent = `Code wurde an ${flow.email} geschickt.`;
-        $('login-btn').textContent = 'Anmelden';
+        $('login-hint').textContent = `Code sent to ${flow.email}.`;
+        $('login-btn').textContent = 'Sign in';
       } else {
         const userData = await flow.login($('code').value.trim());
         const home = await fetchHome(flow.baseUrl, userData);
@@ -82,7 +82,7 @@ async function showLogin() {
         const devices = [...(home.devices ?? []), ...(home.receivedDevices ?? [])].filter(
           (d) => (d.pv ?? '1.0') === '1.0',
         );
-        if (!devices.length) throw new Error('Kein unterstützter Sauger im Konto gefunden.');
+        if (!devices.length) throw new Error('No supported vacuum found in this account.');
         const d = devices[0];
         cfg = {
           userData: { rriot: userData.rriot },
@@ -111,7 +111,7 @@ function batteryColor(b) {
 function render() {
   const s = status;
   const online = robot?.connected && s;
-  $('state').firstChild.textContent = !s ? 'Verbinde …' : (STATES[s.state] ?? `Status ${s.state}`);
+  $('state').firstChild.textContent = !s ? 'Connecting …' : (STATES[s.state] ?? `Status ${s.state}`);
   $('name').textContent = cfg.device.name;
   $('battery').textContent = `${s?.battery ?? '--'} %`;
   $('battery').style.color = batteryColor(s?.battery);
@@ -266,7 +266,7 @@ function equalBytes(a, b) {
 async function refreshStatus() {
   status = await robot.status();
   localStorage.setItem(`${STORE}.status`, JSON.stringify(status));
-  if (status.error_code) banner(`Fehlercode ${status.error_code}`);
+  if (status.error_code) banner(`Error code ${status.error_code}`);
   render();
 }
 
@@ -318,10 +318,10 @@ async function connect() {
     robot.close();
     render();
     if (/refused/.test(err.message)) {
-      banner('Anmeldung abgelaufen. Tippe auf den Gerätenamen, um dich neu anzumelden.');
+      banner('Sign-in expired. Tap the device name to sign in again.');
       return;
     }
-    banner(`Keine Verbindung: ${err.message}`);
+    banner(`No connection: ${err.message}`);
     setTimeout(() => !robot?.connected && !document.hidden && connect(), 5000);
   }
 }
@@ -350,7 +350,7 @@ async function send(action) {
     await robot.rpc(method);
     banner('');
   } catch (err) {
-    banner(`Befehl fehlgeschlagen: ${err.message}`);
+    banner(`Command failed: ${err.message}`);
   } finally {
     busy = false;
     render();
@@ -376,7 +376,7 @@ async function showApp() {
   $('main').onclick = (e) => send(e.currentTarget.dataset.action);
   $('home').onclick = () => send('home');
   $('name').onclick = () => {
-    if (confirm('Abmelden?')) {
+    if (confirm('Sign out?')) {
       localStorage.clear();
       caches.delete('saugi-data');
       location.reload();
