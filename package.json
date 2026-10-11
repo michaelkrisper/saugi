@@ -2,7 +2,8 @@
   "name": "saugi",
   "version": "1.0.0",
   "private": true,
-  "description": "Schnelle Roborock-Steuerung als PWA: Start, Pause, nach Hause, Live-Karte. Cloudflare Pages.",
+  "description": "Roscoe: schnelle Roborock-Steuerung als PWA – Start, Pause, nach Hause, Live-Karte. Cloudflare Pages.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "wrangler pages dev --port 8792",
