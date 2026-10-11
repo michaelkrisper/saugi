@@ -1,0 +1,22 @@
+{
+  "name": "saugi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Schnelle Roborock-Steuerung als PWA: Start, Pause, nach Hause, Live-Karte. Cloudflare Pages.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev --port 8792",
+    "deploy": "wrangler pages deploy --branch main",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "test": "node --test 'tests/*.test.js'",
+    "check": "npm run lint && npm test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.10",
+    "wrangler": "^4.125.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

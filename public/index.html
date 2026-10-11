@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Saugi">
+<title>Saugi</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="modulepreload" href="/js/robot.js">
+<link rel="modulepreload" href="/js/protocol.js">
+<link rel="modulepreload" href="/js/crypto.js">
+<link rel="modulepreload" href="/js/mqtt.js">
+<link rel="modulepreload" href="/js/map.js">
+<style>
+  :root { color-scheme: dark; --bg:#111418; --card:#1b2027; --fg:#e8eaed; --dim:#8b939e; --acc:#4f9dff; --ok:#3ccf7a; --warn:#ffb340; --bad:#ff5d5d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 16px/1.3 system-ui, -apple-system, sans-serif;
+               overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+  body { display: flex; flex-direction: column; height: 100dvh;
+         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  [hidden] { display: none !important; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 18px 6px; }
+  #state { font-size: 22px; font-weight: 600; flex: 1; min-width: 0; }
+  #name { display: block; font-size: 13px; font-weight: 400; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #battery { font-variant-numeric: tabular-nums; padding: 6px 12px; border-radius: 99px; background: var(--card); }
+  #stats { display: flex; gap: 18px; padding: 0 18px; color: var(--dim); font-size: 14px; font-variant-numeric: tabular-nums; min-height: 18px; }
+  #mapbox { flex: 1; position: relative; margin: 10px 12px; border-radius: 18px; background: var(--card); overflow: hidden; }
+  #map { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
+  #banner { margin: 0 12px; padding: 10px 14px; border-radius: 12px; background: #3a1d1d; color: #ffb4b4; font-size: 14px; }
+  nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 12px 14px; }
+  button { appearance: none; border: 0; border-radius: 18px; padding: 20px 0; font: 600 18px system-ui, sans-serif;
+           color: var(--fg); background: var(--card); display: flex; align-items: center; justify-content: center; gap: 10px; }
+  button svg { width: 24px; height: 24px; fill: currentColor; }
+  button.primary { background: var(--acc); color: #fff; }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .45; }
+  #login { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 24px; max-width: 420px; width: 100%; margin: 0 auto; }
+  #login h1 { margin: 0 0 4px; font-size: 28px; }
+  #login p { margin: 0; color: var(--dim); }
+  input { font: 18px system-ui, sans-serif; padding: 16px; border-radius: 14px; border: 1px solid #2c333d; background: var(--card); color: var(--fg);
+          -webkit-user-select: text; user-select: text; }
+  input:focus { outline: 2px solid var(--acc); border-color: transparent; }
+  #logout { background: none; padding: 6px; color: var(--dim); font-size: 13px; font-weight: 400; }
+</style>
+</head>
+<body>
+
+<form id="login" hidden>
+  <h1>Saugi</h1>
+  <p id="login-hint">Mit deinem Roborock-Konto anmelden. Du bekommst einen Code per E-Mail.</p>
+  <input id="email" type="email" autocomplete="email" placeholder="E-Mail" required>
+  <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Code aus der E-Mail" hidden>
+  <button class="primary" id="login-btn">Code senden</button>
+  <div id="login-error" style="color: var(--bad)"></div>
+</form>
+
+<main id="app" hidden style="display:contents">
+  <header>
+    <div id="state">Verbinde …<small id="name"></small></div>
+    <div id="battery">-- %</div>
+  </header>
+  <div id="stats"></div>
+  <div id="banner" hidden></div>
+  <div id="mapbox">
+    <div id="empty">Karte wird geladen …</div>
+    <canvas id="map"></canvas>
+  </div>
+  <nav>
+    <button id="main" class="primary" disabled></button>
+    <button id="home" disabled><svg viewBox="0 0 24 24"><path d="M12 3 2 12h3v8h5v-6h4v6h5v-8h3z"/></svg>Nach Hause</button>
+  </nav>
+</main>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
