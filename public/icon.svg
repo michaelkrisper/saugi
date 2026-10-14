@@ -1,33 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="body" cx=".38" cy=".3" r=".8">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".7" stop-color="#e9ecf0"/>
+      <stop offset="1" stop-color="#c9ced6"/>
+    </radialGradient>
+    <radialGradient id="lds" cx=".4" cy=".35" r=".7">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d4d9e0"/>
+    </radialGradient>
+  </defs>
   <rect width="512" height="512" fill="#111418"/>
-  <circle cx="256" cy="262" r="200" fill="#1f3554"/>
-  <!-- rose ears: small flaps folding outward and down -->
-  <path d="M168 150 C 140 120 96 118 74 146 C 70 156 76 166 88 168 C 110 166 130 176 140 196 Z" fill="#8d5530"/>
-  <path d="M344 150 C 372 120 416 118 438 146 C 442 156 436 166 424 168 C 402 166 382 176 372 196 Z" fill="#8d5530"/>
-  <path d="M86 152 C 106 148 128 156 146 172" stroke="#6e3f22" stroke-width="6" fill="none" stroke-linecap="round"/>
-  <path d="M426 152 C 406 148 384 156 366 172" stroke="#6e3f22" stroke-width="6" fill="none" stroke-linecap="round"/>
-  <!-- broad, blocky head with bulging cheeks -->
-  <path d="M256 124 C 330 124 374 150 384 200 C 392 236 412 268 410 310 C 408 362 370 400 322 414 C 300 420 278 422 256 422 C 234 422 212 420 190 414 C 142 400 104 362 102 310 C 100 268 120 236 128 200 C 138 150 182 124 256 124 Z" fill="#cf8f55"/>
-  <!-- forehead wrinkles -->
-  <path d="M236 176 C 248 168 264 168 276 176 M 230 196 C 246 188 266 188 282 196" stroke="#a8693a" stroke-width="7" fill="none" stroke-linecap="round"/>
-  <!-- short, wide white muzzle and chest blaze -->
-  <path d="M256 214 C 268 214 272 240 276 262 L 236 262 C 240 240 244 214 256 214 Z" fill="#f6efe6"/>
-  <ellipse cx="256" cy="336" rx="110" ry="70" fill="#f6efe6"/>
-  <!-- blush -->
-  <ellipse cx="150" cy="318" rx="22" ry="13" fill="#f08a8a" opacity=".5"/>
-  <ellipse cx="362" cy="318" rx="22" ry="13" fill="#f08a8a" opacity=".5"/>
-  <!-- round eyes, set wide -->
-  <circle cx="190" cy="246" r="24" fill="#2a1d16"/>
-  <circle cx="322" cy="246" r="24" fill="#2a1d16"/>
-  <circle cx="181" cy="237" r="8.5" fill="#fff"/>
-  <circle cx="313" cy="237" r="8.5" fill="#fff"/>
-  <circle cx="198" cy="255" r="3.5" fill="#fff"/>
-  <circle cx="330" cy="255" r="3.5" fill="#fff"/>
-  <!-- broad nose -->
-  <path d="M218 290 C 218 274 294 274 294 290 C 294 308 274 320 256 320 C 238 320 218 308 218 290 Z" fill="#2a1d16"/>
-  <ellipse cx="244" cy="286" rx="10" ry="5" fill="#5a4436"/>
-  <!-- wide staffy grin with tongue -->
-  <path d="M196 336 C 210 392 302 392 316 336 C 296 350 216 350 196 336 Z" fill="#5a2a2a"/>
-  <path d="M232 360 C 232 394 280 394 280 360 C 268 366 244 366 232 360 Z" fill="#ff8fa3"/>
-  <path d="M256 320 V 342 M 192 330 C 210 348 238 350 256 342 C 274 350 302 348 320 330" stroke="#2a1d16" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <circle cx="256" cy="262" r="210" fill="#1f3554"/>
+  <!-- S7 side brush, front left -->
+  <g transform="translate(104 146)" stroke="#3a4048" stroke-width="5" stroke-linecap="round">
+    <path d="M0 0 L -72 -26 M0 0 L -36 -70 M0 0 L 34 -66 M0 0 L -76 32 M0 0 L 62 -40"/>
+    <circle r="11" fill="#2a2f36" stroke="none"/>
+  </g>
+  <!-- shadow + body -->
+  <circle cx="262" cy="272" r="194" fill="#000" opacity=".35"/>
+  <circle cx="256" cy="262" r="194" fill="url(#body)"/>
+  <circle cx="256" cy="262" r="194" fill="none" stroke="#9aa1ab" stroke-width="3"/>
+  <!-- front bumper seam -->
+  <path d="M84 172 A 194 194 0 0 1 428 172" fill="none" stroke="#aeb4bd" stroke-width="3"/>
+  <!-- top lid seam -->
+  <path d="M124 262 C 124 210 170 188 256 188 C 342 188 388 210 388 262 C 388 352 334 410 256 410 C 178 410 124 352 124 262 Z" fill="none" stroke="#c2c7cf" stroke-width="3"/>
+  <!-- LDS turret -->
+  <circle cx="256" cy="134" r="60" fill="#b5bbc4"/>
+  <circle cx="256" cy="130" r="56" fill="url(#lds)"/>
+  <path d="M206 104 A 56 56 0 0 1 306 104" fill="none" stroke="#2a2f36" stroke-width="8"/>
+  <circle cx="256" cy="130" r="40" fill="none" stroke="#c9ced6" stroke-width="2"/>
+  <!-- button strip: home, power, spot -->
+  <rect x="196" y="222" width="120" height="40" rx="20" fill="#dde1e6" stroke="#b5bbc4" stroke-width="2"/>
+  <circle cx="256" cy="242" r="13" fill="none" stroke="#f5a623" stroke-width="3"/>
+  <path d="M256 233 V 243" stroke="#4a5059" stroke-width="3" stroke-linecap="round"/>
+  <path d="M214 244 L 222 236 L 230 244 M 217 241 V 250 H 227 V 241" fill="none" stroke="#4a5059" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="284" y="236" width="12" height="12" rx="2" fill="none" stroke="#4a5059" stroke-width="2.5"/>
+  <!-- wordmark -->
+  <text x="256" y="338" text-anchor="middle" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="40" font-weight="700" letter-spacing="1" fill="#5b636e">roborock</text>
+  <text x="256" y="374" text-anchor="middle" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="22" letter-spacing="4" fill="#9aa1ab">S7</text>
 </svg>
