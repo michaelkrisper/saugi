@@ -1,5 +1,5 @@
 // App shell offline-first so the UI paints instantly; relays are never cached.
-const CACHE = 'saugi-shell-v8';
+const CACHE = 'saugi-shell-v9';
 const SHELL = [
   '/',
   '/js/app.js',

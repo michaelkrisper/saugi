@@ -93,7 +93,7 @@ try {
       device: { duid: 'demo', name: 'Roborock S7', localKey: 'abcdEFGH12345678', model: 'roborock.vacuum.a15' },
       rooms: {},
     }));
-    localStorage.setItem('saugi.status', JSON.stringify({ state: 5, battery: 76, clean_area: 12300000, clean_time: 840, in_cleaning: 1 }));
+    localStorage.setItem('saugi.status', JSON.stringify({ state: 5, battery: 76, clean_area: 12300000, clean_time: 840, in_cleaning: 1, fan_power: 102 }));
     localStorage.setItem('saugi.roomNames', JSON.stringify({ 16: 'Kitchen', 17: 'Living room', 18: 'Bath', 19: 'Hall', 20: 'Bedroom', 21: 'Office' }));
     const bytes = Uint8Array.from(atob('${map}'), (c) => c.charCodeAt(0));
     await (await caches.open('saugi-data')).put('/last-map', new Response(bytes));

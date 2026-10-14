@@ -126,6 +126,10 @@ function render() {
   main.dataset.action = moving ? 'pause' : 'start';
   main.disabled = !online || busy;
   $('home').disabled = !online || busy || RETURNING.has(s.state) || DOCKED.has(s.state);
+  for (const b of $('fan').children) {
+    b.classList.toggle('on', Number(b.dataset.fan) === s?.fan_power);
+    b.disabled = !online || busy;
+  }
 }
 
 // No-go zones red, no-mop zones purple, virtual walls as red lines.
@@ -300,6 +304,7 @@ async function connect() {
     if (!status) return;
     if (dps[121] != null) status.state = dps[121];
     if (dps[122] != null) status.battery = dps[122];
+    if (dps[123] != null) status.fan_power = dps[123];
     render();
   };
   try {
@@ -359,6 +364,24 @@ async function send(action) {
   }
 }
 
+async function setFan(power) {
+  busy = true;
+  const prev = status.fan_power;
+  status.fan_power = power;
+  render();
+  navigator.vibrate?.(15);
+  try {
+    await robot.rpc('set_custom_mode', [power]);
+    banner('');
+  } catch (err) {
+    status.fan_power = prev;
+    banner(`Command failed: ${err.message}`);
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
 async function showApp() {
   $('login').hidden = true;
   $('app').hidden = false;
@@ -375,6 +398,7 @@ async function showApp() {
 
   $('main').onclick = (e) => send(e.currentTarget.dataset.action);
   $('home').onclick = () => send('home');
+  $('fan').onclick = (e) => e.target.dataset.fan && setFan(Number(e.target.dataset.fan));
   $('name').onclick = () => {
     if (confirm('Sign out?')) {
       localStorage.clear();

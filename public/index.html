@@ -39,6 +39,9 @@
   #map { position: absolute; inset: 0; width: 100%; height: 100%; }
   #empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
   #banner { margin: 0 12px; padding: 10px 14px; border-radius: 12px; background: #3a1d1d; color: #ffb4b4; font-size: 14px; }
+  #fan { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 0 12px 10px; padding: 4px; border-radius: 14px; background: var(--card); }
+  #fan button { padding: 10px 0; border-radius: 10px; font: 600 14px system-ui, sans-serif; color: var(--dim); background: none; }
+  #fan button.on { color: var(--fg); background: #2c333d; }
   nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 12px 14px; }
   button { appearance: none; border: 0; border-radius: 18px; padding: 20px 0; font: 600 18px system-ui, sans-serif;
            color: var(--fg); background: var(--card); display: flex; align-items: center; justify-content: center; gap: 10px; }
@@ -76,6 +79,12 @@
   <div id="mapbox">
     <div id="empty">Loading map …</div>
     <canvas id="map"></canvas>
+  </div>
+  <div id="fan">
+    <button data-fan="101" disabled>Quiet</button>
+    <button data-fan="102" disabled>Balanced</button>
+    <button data-fan="103" disabled>Turbo</button>
+    <button data-fan="104" disabled>Max</button>
   </div>
   <nav>
     <button id="main" class="primary" disabled></button>
