@@ -40,12 +40,13 @@
   #empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
   #banner { margin: 0 12px; padding: 10px 14px; border-radius: 12px; background: #3a1d1d; color: #ffb4b4; font-size: 14px; }
   #fan { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 0 12px 10px; padding: 4px; border-radius: 14px; background: var(--card); }
-  #fan button { padding: 10px 0; border-radius: 10px; font: 600 14px system-ui, sans-serif; color: var(--dim); background: none; }
+  #fan button { flex-direction: column; gap: 4px; padding: 8px 0 6px; border-radius: 10px; font: 600 12px system-ui, sans-serif; color: var(--dim); background: none; }
+  #fan button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   #fan button.on { color: var(--fg); background: #2c333d; }
   nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 12px 14px; }
   button { appearance: none; border: 0; border-radius: 18px; padding: 20px 0; font: 600 18px system-ui, sans-serif;
            color: var(--fg); background: var(--card); display: flex; align-items: center; justify-content: center; gap: 10px; }
-  button svg { width: 24px; height: 24px; fill: currentColor; }
+  button svg { width: 24px; height: 24px; fill: currentColor; pointer-events: none; }
   button.primary { background: var(--acc); color: #fff; }
   button:active { transform: scale(.97); }
   button:disabled { opacity: .45; }
@@ -81,10 +82,22 @@
     <canvas id="map"></canvas>
   </div>
   <div id="fan">
-    <button data-fan="101" disabled>Quiet</button>
-    <button data-fan="102" disabled>Balanced</button>
-    <button data-fan="103" disabled>Turbo</button>
-    <button data-fan="104" disabled>Max</button>
+    <button data-fan="101" disabled>
+      <svg viewBox="0 0 24 24"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5zM16 8 2 22M17.5 15H9"/></svg>
+      Quiet
+    </button>
+    <button data-fan="102" disabled>
+      <svg viewBox="0 0 24 24"><path d="M4 10h10.5a2.5 2.5 0 1 0-2.5-2.5M2 14h13.5a2.5 2.5 0 1 1-2.5 2.5"/></svg>
+      Balanced
+    </button>
+    <button data-fan="103" disabled>
+      <svg viewBox="0 0 24 24"><path d="M3 8h11.5a2.5 2.5 0 1 0-2.5-2.5M2 12h14.5a2.5 2.5 0 1 1-2.5 2.5M5 16h8.5a2.5 2.5 0 1 0-2.5-2.5"/></svg>
+      Turbo
+    </button>
+    <button data-fan="104" disabled>
+      <svg viewBox="0 0 24 24"><path d="M4 6h11.5a2.5 2.5 0 1 0-2.5-2.5M2 10h14.5a2.5 2.5 0 1 1-2.5 2.5M3 14h12.5a2.5 2.5 0 1 0-2.5-2.5M5 18h9.5a2.5 2.5 0 1 1-2.5 2.5"/></svg>
+      Max
+    </button>
   </div>
   <nav>
     <button id="main" class="primary" disabled></button>

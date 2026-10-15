@@ -398,7 +398,10 @@ async function showApp() {
 
   $('main').onclick = (e) => send(e.currentTarget.dataset.action);
   $('home').onclick = () => send('home');
-  $('fan').onclick = (e) => e.target.dataset.fan && setFan(Number(e.target.dataset.fan));
+  $('fan').onclick = (e) => {
+    const b = e.target.closest('[data-fan]');
+    if (b) setFan(Number(b.dataset.fan));
+  };
   $('name').onclick = () => {
     if (confirm('Sign out?')) {
       localStorage.clear();
