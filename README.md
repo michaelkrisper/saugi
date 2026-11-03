@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Biome](https://img.shields.io/badge/code_style-Biome-60a5fa?logo=biome&logoColor=white)](https://biomejs.dev)
 [![PWA](https://img.shields.io/badge/PWA-iOS%20%26%20Android-5a0fc8)](https://saugi.pages.dev)
+[![Live](https://img.shields.io/badge/live-saugi.pages.dev-f38020?logo=cloudflare&logoColor=white)](https://saugi.pages.dev)
 
 A fast, minimal remote for Roborock robot vacuums, built as a PWA. One single
 page instead of the official app: start, pause, send it home, plus a live map
@@ -75,13 +76,19 @@ npm run deploy   # Cloudflare Pages (branch main)
 node scripts/browser-check.mjs http://localhost:8792   # headless Chrome smoke test
 ```
 
-The tests (`tests/protocol.test.js`) compare MD5, CRC32, AES, the message
-format, the Hawk signature and the map parser byte for byte against reference
-values from python-roborock. The smoke test signs in with deliberately wrong
+The tests run with Node's built-in test runner, no test dependencies:
+
+| File | Covers |
+| --- | --- |
+| `tests/protocol.test.js` | MD5, CRC32, AES, the message format, the Hawk signature and the map parser, byte for byte against reference values from python-roborock |
+| `tests/mqtt.test.js` | MQTT framing against a fake WebSocket: CONNECT, SUBSCRIBE/SUBACK, PUBLISH/PUBACK, packet-id wrap, fragmented frames and multi-byte lengths |
+| `tests/relay.test.js` | The REST relay: host allowlist, forwarded headers, path and query mapping |
+
+The browser smoke test signs in with deliberately wrong
 credentials, so it never drives a real vacuum.
 
-Every push to `main` goes through lint and tests and is then deployed, as long
-as the `CLOUDFLARE_API_TOKEN` secret is set.
+Every push and pull request goes through lint and tests; pushes to `main` are
+then deployed, as long as the `CLOUDFLARE_API_TOKEN` secret is set.
 
 ## Acknowledgements
 
