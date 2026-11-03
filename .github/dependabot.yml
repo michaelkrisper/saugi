@@ -1,4 +1,5 @@
-# Updates of actions and dev tools as grouped weekly pull requests.
+# Weekly updates of actions and dev tools; minor and patch bumps are grouped,
+# majors arrive as separate pull requests.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -7,7 +8,7 @@ updates:
       interval: weekly
     groups:
       actions:
-        patterns: ['*']
+        update-types: [minor, patch]
 
   - package-ecosystem: npm
     directory: /
@@ -15,4 +16,4 @@ updates:
       interval: weekly
     groups:
       npm:
-        patterns: ['*']
+        update-types: [minor, patch]
