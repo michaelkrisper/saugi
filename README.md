@@ -27,6 +27,7 @@ with position, path and restricted zones.
 - **Opens instantly**: the app shell is served offline by the service worker,
   the last map and status come from the cache, live data follows.
 - Feels native: no zoom, no scrolling, safe-area aware, dark mode.
+- English user interface.
 
 ## Sign-in
 
@@ -81,6 +82,7 @@ The tests run with Node's built-in test runner, no test dependencies:
 | File | Covers |
 | --- | --- |
 | `tests/protocol.test.js` | MD5, CRC32, AES, the message format, the Hawk signature and the map parser, byte for byte against reference values from python-roborock |
+| `tests/codec.test.js` | Codec edge cases: PKCS#7 padding at block boundaries, checksum and version rejection, frames without CRC, RPC envelope, HMAC (RFC 4231) |
 | `tests/mqtt.test.js` | MQTT framing against a fake WebSocket: CONNECT, SUBSCRIBE/SUBACK, PUBLISH/PUBACK, packet-id wrap, fragmented frames and multi-byte lengths |
 | `tests/relay.test.js` | The REST relay: host allowlist, forwarded headers, path and query mapping |
 
