@@ -79,6 +79,10 @@ npm run deploy                    # manual deploy: stamps a copy in dist/, wrang
 - A refused MQTT connection (CONNACK 5) can also mean rate limiting, not only invalid
   credentials; the app then shows "Sign-in expired". A retry backoff was considered and
   deliberately not built; only add one if this causes real problems.
+- Schedules (`schedule.js`) live in two places, as in the Roborock app's S7 plugin: a
+  cloud job (`/user/devices/<duid>/jobs`) and a vacuum entry (`set_server_timer`, same
+  name). The Roborock app lists only jobs the vacuum knows, and the cloud does not sync
+  on/off to the vacuum (`upd_server_timer`). Day numbers: 0 = Sunday.
 - iOS: 26 px extra top padding under the safe area (the status bar blur covers content
   otherwise); zoom and scrolling are disabled on purpose.
 

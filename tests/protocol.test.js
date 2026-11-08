@@ -107,6 +107,11 @@ test('hawk header matches python', async () => {
   assert.equal(await hawk(h.rriot, h.path, 1700000000, 'NONCE123'), h.auth);
 });
 
+test('hawk header with JSON body matches python', async () => {
+  const h = V.hawkBody;
+  assert.equal(await hawk(h.rriot, h.path, 1700000000, 'NONCE123', h.body), h.auth);
+});
+
 test('no-go zones, no-mop zones and virtual walls parse like python', () => {
   const m = parseMap(new Uint8Array(readFileSync(new URL('fixtures/s5-zones.bin', import.meta.url))));
   const e = JSON.parse(readFileSync(new URL('fixtures/zones.json', import.meta.url)));

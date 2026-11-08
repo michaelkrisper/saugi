@@ -97,5 +97,16 @@
  "endpoint": {
   "k": "kkey",
   "endpoint": "Iaa3vXvX"
+ },
+ "hawkBody": {
+  "path": "/user/devices/duid1/jobs/42",
+  "body": "{\"cron\":\"30 07 ? * 0,6\",\"enabled\":false,\"param\":{\"id\":1}}",
+  "auth": "Hawk id=\"user123\",s=\"sss\",ts=\"1700000000\",nonce=\"NONCE123\",mac=\"Z0KujF4G+cZ7NFDwd3rQqt3bGNmGEz4iliMmTprfIvo=\"",
+  "rriot": {
+   "u": "user123",
+   "s": "sss",
+   "h": "hhhkey",
+   "k": "kkk"
+  }
  }
 }
