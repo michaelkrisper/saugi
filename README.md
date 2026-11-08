@@ -1,6 +1,7 @@
 # Roscoe
 
 [![CI](https://github.com/michaelkrisper/saugi/actions/workflows/deploy.yml/badge.svg)](https://github.com/michaelkrisper/saugi/actions/workflows/deploy.yml)
+[![Version](https://img.shields.io/github/v/tag/michaelkrisper/saugi?sort=semver&label=version)](https://github.com/michaelkrisper/saugi/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Biome](https://img.shields.io/badge/code_style-Biome-60a5fa?logo=biome&logoColor=white)](https://biomejs.dev)
 [![PWA](https://img.shields.io/badge/PWA-iOS%20%26%20Android-5a0fc8)](https://saugi.pages.dev)
@@ -90,7 +91,14 @@ The browser smoke test signs in with deliberately wrong
 credentials, so it never drives a real vacuum.
 
 Every push and pull request goes through lint and tests; pushes to `main` are
-then deployed, as long as the `CLOUDFLARE_API_TOKEN` secret is set.
+then deployed, as long as the `CLOUDFLARE_API_TOKEN` secret is set. Every
+merge to `main` is tagged with the next patch version and only tagged commits
+are deployed; bundled releases with release notes come from the Release
+workflow (see [CONTRIBUTING](CONTRIBUTING.md#versions-and-releases)).
+
+## Contributing
+
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Acknowledgements
 
