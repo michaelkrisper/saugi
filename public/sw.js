@@ -15,6 +15,7 @@ const SHELL = [
   '/js/mqtt.js',
   '/js/protocol.js',
   '/js/robot.js',
+  '/js/schedule.js',
   '/manifest.webmanifest',
 ];
 const ASSETS = ['/icon.svg', '/icon-180.png', '/icon-192.png', '/icon-512.png'];

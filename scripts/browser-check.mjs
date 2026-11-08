@@ -108,6 +108,10 @@ try {
   if (!state.mapShown) throw new Error('cached map was not drawn');
   if (!/Sign-in expired/.test(state.banner))
     throw new Error(`expected broker to reject fake login, got: ${state.banner}`);
+  // The cloud rejects the fake credentials, so the dialog shows its load error.
+  await evaluate("document.getElementById('sched-btn').click()");
+  await wait(1500);
+  await shot('saugi-schedule');
 } finally {
   ws?.close();
   chrome.kill();

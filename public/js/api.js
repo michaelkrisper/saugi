@@ -15,13 +15,17 @@ function relay(url) {
   return `/rest/${u.host}${u.pathname}${u.search}`;
 }
 
-async function call(url, { method = 'POST', params, form, headers = {} } = {}) {
+async function call(url, { method = 'POST', params, form, body, headers = {} } = {}) {
   const u = new URL(url);
   for (const [k, v] of Object.entries(params ?? {})) u.searchParams.set(k, v);
   const init = { method, headers: { ...headers } };
   if (form) {
     init.body = new URLSearchParams(form).toString();
     init.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  }
+  if (body) {
+    init.body = body;
+    init.headers['Content-Type'] = 'application/json';
   }
   const res = await fetch(relay(u.href), init);
   const text = await res.text();
@@ -118,8 +122,14 @@ export class LoginFlow {
   }
 }
 
-export async function hawk(rriot, path, ts = Math.floor(Date.now() / 1000), nonce = randomString(8)) {
-  const pre = [rriot.u, rriot.s, nonce, ts, md5hex(path), '', ''].join(':');
+export async function hawk(
+  rriot,
+  path,
+  ts = Math.floor(Date.now() / 1000),
+  nonce = randomString(8),
+  body = '',
+) {
+  const pre = [rriot.u, rriot.s, nonce, ts, md5hex(path), '', body && md5hex(body)].join(':');
   const mac = await hmacSha256Base64(rriot.h, pre);
   return `Hawk id="${rriot.u}",s="${rriot.s}",ts="${ts}",nonce="${nonce}",mac="${mac}"`;
 }
@@ -139,3 +149,20 @@ export async function fetchHome(baseUrl, userData) {
   if (!res.success) throw new Error(`Could not load devices: ${res.msg ?? JSON.stringify(res)}`);
   return res.result;
 }
+
+// Cleaning schedules live in the cloud as "jobs". The JSON body is part of the
+// Hawk MAC, so it is serialised once and sent exactly as signed.
+async function iot(rriot, method, path, data) {
+  const body = data && JSON.stringify(data);
+  const res = await call(rriot.r.a + path, {
+    method,
+    body,
+    headers: { Authorization: await hawk(rriot, path, undefined, undefined, body) },
+  });
+  if (!res.success) throw new Error(res.msg ?? JSON.stringify(res));
+  return res.result;
+}
+
+export const getJobs = (rriot, duid) => iot(rriot, 'GET', `/user/devices/${duid}/jobs`);
+export const addJob = (rriot, duid, job) => iot(rriot, 'POST', `/user/devices/${duid}/jobs`, job);
+export const putJob = (rriot, duid, id, job) => iot(rriot, 'PUT', `/user/devices/${duid}/jobs/${id}`, job);

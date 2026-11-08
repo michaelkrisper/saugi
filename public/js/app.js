@@ -1,5 +1,6 @@
 import { parseMap, rasterize, toPixel } from './map.js';
 import { Robot } from './robot.js';
+import { deviceTimer, jobName, newJob, parseCron, updatedJob } from './schedule.js';
 
 const STATES = {
   1: 'Starting',
@@ -319,6 +320,7 @@ async function connect() {
     lastMap = 0;
     await poll();
     loadRoomNames();
+    loadJob().catch(() => {});
   } catch (err) {
     robot.close();
     render();
@@ -382,6 +384,70 @@ async function setFan(power) {
   }
 }
 
+// --- schedule: the oldest job the vacuum knows, created on first save if there is none ---
+
+let job = null;
+
+async function loadJob() {
+  const { getJobs } = await import('./api.js');
+  const [jobs, timers] = await Promise.all([
+    getJobs(cfg.userData.rriot, cfg.device.duid),
+    robot.rpc('get_server_timer'),
+  ]);
+  const known = new Set((Array.isArray(timers[0]) ? timers : [timers]).map(([name]) => name));
+  // The cloud reorders jobs on edit; take the oldest so it stays the same one.
+  job = jobs.filter((j) => known.has(jobName(j))).sort((a, b) => a.id - b.id)[0] ?? null;
+  $('sched-btn').classList.toggle('on', !!job?.enabled);
+}
+
+async function openSchedule() {
+  $('sched-error').textContent = '';
+  $('sched-save').disabled = true;
+  $('sched').showModal();
+  try {
+    if (!robot?.connected) throw new Error('the vacuum is offline');
+    await loadJob();
+    const { hour, minute, days } = job ? parseCron(job.cron) : { hour: 10, minute: 0, days: [1, 2, 3, 4, 5] };
+    $('sched-on').checked = job ? job.enabled : true;
+    $('sched-time').value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    for (const b of $('sched-days').children) b.classList.toggle('on', days.includes(Number(b.dataset.day)));
+    $('sched-save').disabled = false;
+  } catch (err) {
+    $('sched-error').textContent = `Could not load the schedule: ${err.message}`;
+  }
+}
+
+async function saveSchedule() {
+  const [hour, minute] = $('sched-time').value.split(':').map(Number);
+  const days = [...$('sched-days').querySelectorAll('.on')].map((b) => Number(b.dataset.day));
+  if (!days.length) {
+    $('sched-error').textContent = 'Pick at least one day.';
+    return;
+  }
+  const plan = { hour, minute, days, enabled: $('sched-on').checked };
+  const { addJob, putJob } = await import('./api.js');
+  const { rriot } = cfg.userData;
+  const { duid } = cfg.device;
+  $('sched-save').disabled = true;
+  try {
+    if (!robot?.connected) throw new Error('the vacuum is offline');
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const next = job ? updatedJob(job, plan) : newJob(plan, status, tz);
+    // Same order as the Roborock app: the vacuum entry first, then the cloud job.
+    // The cloud does not sync on/off to the vacuum, so that is set separately.
+    await robot.rpc('set_server_timer', [deviceTimer(next, plan)]);
+    if (job) await putJob(rriot, duid, job.id, next);
+    else await addJob(rriot, duid, next);
+    await robot.rpc('upd_server_timer', [[jobName(next), plan.enabled ? 'on' : 'off']]);
+    await loadJob();
+    $('sched').close();
+  } catch (err) {
+    $('sched-error').textContent = `Could not save: ${err.message}`;
+  } finally {
+    $('sched-save').disabled = false;
+  }
+}
+
 async function showApp() {
   $('login').hidden = true;
   $('app').hidden = false;
@@ -401,6 +467,13 @@ async function showApp() {
   $('fan').onclick = (e) => {
     const b = e.target.closest('[data-fan]');
     if (b) setFan(Number(b.dataset.fan));
+  };
+  $('sched-btn').onclick = openSchedule;
+  $('sched-days').onclick = (e) => e.target.closest('[data-day]')?.classList.toggle('on');
+  $('sched').querySelector('form').onsubmit = (e) => {
+    if (e.submitter?.value !== 'save') return;
+    e.preventDefault();
+    saveSchedule();
   };
   $('name').onclick = () => {
     if (confirm('Sign out?')) {
