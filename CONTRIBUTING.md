@@ -34,5 +34,7 @@ node scripts/browser-check.mjs http://localhost:8792   # headless Chrome smoke t
 ```
 
 The browser smoke test signs in with deliberately wrong credentials, so it
-never drives a real vacuum. When changing files in `public/`, bump `CACHE` in
-`public/sw.js`.
+never drives a real vacuum. The service worker's cache names are stamped with
+a content hash on deploy (`scripts/stamp-sw.mjs`), so there is nothing to
+bump; a new file the app needs offline goes into `SHELL` (or `ASSETS` for
+icons) in `public/sw.js`.
