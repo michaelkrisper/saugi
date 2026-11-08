@@ -30,6 +30,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      # The service worker's cache names get a content hash of their files.
+      - run: node scripts/stamp-sw.mjs public
       - id: guard
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

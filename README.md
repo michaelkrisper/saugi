@@ -74,7 +74,7 @@ No build step, no runtime dependencies. Node ≥ 24.
 npm install
 npm run dev      # wrangler pages dev on http://localhost:8792
 npm run check    # Biome + tests
-npm run deploy   # Cloudflare Pages (branch main)
+npm run deploy   # Cloudflare Pages (branch main), stamps sw.js in a copy (dist/)
 node scripts/browser-check.mjs http://localhost:8792   # headless Chrome smoke test
 ```
 
