@@ -71,6 +71,13 @@ npm run deploy                    # manual deploy: stamps a copy in dist/, wrang
   `tests/fixtures/vectors.json` holds reference values generated with python-roborock.
   For protocol questions, check against those libraries, and add new vectors from them
   rather than from our own output.
+- Second source when those libraries have no answer (RPC parameters, call order): the
+  Roborock app's device plugin. The APK holds no device logic; the S7 plugin
+  (product id 23 from `/api/v4/product`) comes from `POST <baseUrl>/api/v1/appplugin`
+  `{"apilevel":99999,"productids":[23],"type":2}` with the user token (python-roborock
+  `download_code`). The zip holds Hermes bytecode (`index.android.bundle`); decompile
+  with `hbc-decompiler` (P1sec/hermes-dec) and search for the RPC name. Good for
+  reading call shapes only; vectors still come from python-roborock.
 - Testing against a real vacuum: only read-only RPCs (`get_status`, `get_map_v1`,
   `get_room_mapping`). Never send movement commands (`app_start`, `app_pause`,
   `app_charge`, ...) without the owner's explicit OK.
