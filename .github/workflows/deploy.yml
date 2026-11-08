@@ -23,9 +23,10 @@ jobs:
       - run: npm ci
       - run: npm run check
 
+  # Only commits that got a version tag: a re-run of an older run deploys nothing.
   deploy:
-    needs: quality
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [quality, version]
+    if: needs.version.outputs.version != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -45,3 +46,25 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy --branch main
+
+  # Tags every tested commit on main with the next patch version (vX.Y.Z).
+  version:
+    name: Version tag
+    needs: [quality]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: version-tag
+      cancel-in-progress: false
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: tag
+        run: python3 .github/scripts/release.py tag
+        env:
+          GH_TOKEN: ${{ github.token }}
