@@ -21,7 +21,9 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
 ```
 
 - CI (`deploy.yml`, workflow "Deploy"): `quality` on every push/PR; on `main`
-  "Version tag", then job `server` ("krisperapps.de") stamps `public/sw.js`, installs
+  "Version tag", then job `server` ("krisperapps.de") writes the tag into
+  `public/js/version.js` (the repo holds `dev`; shown at the bottom of the main screen),
+  stamps `public/sw.js`, installs
   `ws` into the upload folder (`npm ci --omit=dev`; the server has no npm), rsyncs it to
   the server (secret `DEPLOY_SSH_KEY`) and verifies the live site, including a WebSocket
   handshake. The server restarts the service when `.version` changes. No manual deploy.
