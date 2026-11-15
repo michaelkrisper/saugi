@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import { createServer as createTcpServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -198,8 +199,11 @@ test('the REST relay over HTTP: mapping, body, limits', async () => {
   assert.equal((await get('/rest/euiot.roborock.com/x', { 'sec-fetch-site': 'cross-site' })).status, 403);
   assert.equal((await get('/nothing')).status, 404);
   assert.equal((await get('/js/app.js')).status, 404);
+  // Browsers send Origin with every POST: without it, it is not the app.
+  assert.equal((await realFetch(`${base}/rest/euiot.roborock.com/x`, { method: 'POST' })).status, 403);
   const big = await realFetch(`${base}/rest/euiot.roborock.com/x`, {
     method: 'POST',
+    headers: { origin: base },
     body: 'x'.repeat(300 * 1024),
   });
   assert.equal(big.status, 413);
@@ -216,4 +220,83 @@ test('the start page is answered here, since the proxy passes directories on', a
   assert.equal(res.headers.get('content-type'), 'text/html; charset=utf-8');
   assert.equal(res.headers.get('cache-control'), 'no-cache');
   assert.match(await res.text(), /<title>/);
+});
+
+/** A request whose target fetch() would refuse to send; resolves with the status line's code. */
+function raw(path, headers = {}) {
+  const { hostname, port } = new URL(base);
+  return new Promise((resolve, reject) => {
+    const request = httpRequest({ hostname, port, path, headers });
+    request.on('response', (res) => resolve(res.resume().statusCode));
+    request.on('upgrade', (res, socket) => resolve(socket.destroy() && res.statusCode));
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+test('a target that is no URL is a bad request, with or without an upgrade', async () => {
+  const upgrade = { connection: 'Upgrade', upgrade: 'websocket', origin: base };
+  assert.equal(await raw('//['), 400);
+  assert.equal(await raw('//[', upgrade), 400);
+  // Still there.
+  assert.equal((await realFetch(`${base}/`)).status, 200);
+});
+
+test('the REST relay is limited per client, code mails more tightly', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return new Response('{"code":200}');
+  };
+  const from = (ip, path = '/rest/euiot.roborock.com/x', method = 'GET') =>
+    realFetch(`${base}${path}`, { method, headers: { 'cf-connecting-ip': ip, origin: base } });
+  for (let i = 0; i < 30; i++) assert.equal((await from('203.0.113.1')).status, 200);
+  const refused = await from('203.0.113.1');
+  assert.equal(refused.status, 429);
+  assert.equal((await refused.json()).code, 429);
+  assert.equal(calls, 30);
+  // Others are not affected; one IPv6 /64 is one client.
+  assert.equal((await from('203.0.113.2')).status, 200);
+  for (let i = 0; i < 30; i++) assert.equal((await from(`2001:db8:0:1::${i + 1}`)).status, 200);
+  assert.equal((await from('2001:db8:0:1:ffff::1')).status, 429);
+  assert.equal((await from('2001:db8:0:2::1')).status, 200);
+
+  const send = '/rest/euiot.roborock.com/api/v4/email/code/send';
+  for (let i = 0; i < 6; i++) assert.equal((await from('203.0.113.3', send, 'POST')).status, 200);
+  assert.equal((await from('203.0.113.3', send, 'POST')).status, 429);
+  assert.equal(
+    (await from('203.0.113.3', '/rest/euiot.roborock.com/api/v1/sendEmailCod%65', 'POST')).status,
+    429,
+  );
+  assert.equal((await from('203.0.113.3', '/rest/euiot.roborock.com/api/v3/key/sign', 'POST')).status, 200);
+});
+
+test('one client gets three bridges, and a bridge without a CONNACK is closed', async () => {
+  const host = await start(
+    (options) => tlsConnect({ ...options, host: '127.0.0.1', port: brokerPort, ca: cert }),
+    {
+      connackTimeout: 300,
+    },
+  );
+  const url = `ws://${host}/mqtt?host=${BROKER}&port=8883`;
+  const from = (ip) => open(url, { origin: `http://${host}`, 'cf-connecting-ip': ip });
+  const mine = [await from('203.0.113.1'), await from('203.0.113.1'), await from('203.0.113.1')];
+  await assert.rejects(from('203.0.113.1'));
+  const other = await from('203.0.113.2');
+
+  // The echo broker returns what it gets: a CONNACK keeps the bridge, anything else does not.
+  const closed = [];
+  for (const ws of [...mine, other]) ws.addEventListener('close', () => closed.push(ws));
+  const stays = next(mine[0], 'message');
+  mine[0].send(new Uint8Array([0x20, 2, 0, 0]));
+  mine[1].send(new Uint8Array([0x10, 0]));
+  await stays;
+  assert.equal((await next(mine[1], 'close')).code, 1011);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(closed.length, 3);
+  assert.ok(!closed.includes(mine[0]));
+
+  // The closed ones count no longer.
+  (await from('203.0.113.1')).close();
+  mine[0].close();
 });

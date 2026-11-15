@@ -41,7 +41,8 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
   params })`, and kept that way) and `server/mqtt.js` (WebSocket via `ws` <-> TLS 8883
   via `node:tls`) share the host allowlist in `shared/relay.js`. They exist only
   because the Roborock REST API sends no CORS headers and the broker speaks raw TLS;
-  keep them stateless and limited to `*.roborock.com`.
+  keep them stateless (the per-client limits in `server/limit.js` are the one
+  exception, in memory) and limited to the Roborock hosts the app uses.
 - `server/node.js`: node:http entry, loopback only. Routes `/rest/*`, `/mqtt` (upgrade)
   and `/` (Caddy passes directories on, so the entry answers the start page); checks
   the origin and the body size. Static files never reach it: Caddy serves `public/`
