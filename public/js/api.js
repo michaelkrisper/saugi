@@ -18,7 +18,10 @@ function relay(url) {
 async function call(url, { method = 'POST', params, form, body, headers = {} } = {}) {
   const u = new URL(url);
   for (const [k, v] of Object.entries(params ?? {})) u.searchParams.set(k, v);
-  const init = { method, headers: { ...headers } };
+  // Proxies drop header names with an underscore, so Roborock's header_<name>
+  // travels as x-roborock-<name>; the relay turns it back.
+  const init = { method, headers: {} };
+  for (const [k, v] of Object.entries(headers)) init.headers[k.replace(/^header_/, 'x-roborock-')] = v;
   if (form) {
     init.body = new URLSearchParams(form).toString();
     init.headers['Content-Type'] = 'application/x-www-form-urlencoded';

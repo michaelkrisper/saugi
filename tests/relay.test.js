@@ -51,7 +51,8 @@ test('path, query, method, body and allowed headers are passed through', async (
     headers: {
       Authorization: 'Hawk id="x"',
       'Content-Type': 'application/x-www-form-urlencoded',
-      header_clientid: 'abc',
+      'x-roborock-clientid': 'abc',
+      'x-roborock-clientlang': 'en',
       'x-mercy-ks': 'k',
       Cookie: 'secret=1',
       'X-Forwarded-For': '1.2.3.4',
@@ -66,6 +67,7 @@ test('path, query, method, body and allowed headers are passed through', async (
     'authorization',
     'content-type',
     'header_clientid',
+    'header_clientlang',
     'x-mercy-ks',
   ]);
   assert.equal(res.status, 201);
