@@ -23,7 +23,7 @@ jobs:
       - run: npm ci
       - run: npm run check
 
-  # The own server (https://saugi.krisperapps.de/): Caddy serves public/, Node the relays.
+  # The own server (https://roscoe.krisperapps.de/): Caddy serves public/, Node the relays.
   # Only commits that got a version tag: a re-run of an older run deploys nothing.
   # The key may only write into the app's folder there; the server restarts the
   # app once .version changes.
@@ -63,7 +63,7 @@ jobs:
       - name: Verify
         run: |
           set -euo pipefail
-          live=https://saugi.krisperapps.de
+          live=https://roscoe.krisperapps.de
           check() {
             for attempt in 1 2 3 4 5; do
               code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${@:3}" "$live$1" || true)"

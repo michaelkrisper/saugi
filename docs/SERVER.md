@@ -1,6 +1,6 @@
 # Server
 
-The app runs on the own server at https://saugi.krisperapps.de/: Caddy in
+The app runs on the own server at https://roscoe.krisperapps.de/: Caddy in
 front, a small Node service behind it. No secrets, no database; the service
 stores nothing.
 

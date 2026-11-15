@@ -5,7 +5,7 @@ web app: start/pause/resume, go home, live map with path and zones. The browser 
 the Roborock protocol itself (login, MQTT, AES, map parsing in `public/js/`); two
 stateless relays on Node only pass bytes to `*.roborock.com`. Vanilla ES modules, no
 build step; the server's one runtime dependency is `ws`. Hosted on the own server
-(https://saugi.krisperapps.de: Caddy serves `public/`, a Node service the relays),
+(https://roscoe.krisperapps.de: Caddy serves `public/`, a Node service the relays),
 deployed by CI. UI English.
 
 ## Commands

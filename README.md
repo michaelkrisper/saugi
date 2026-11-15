@@ -4,14 +4,14 @@
 [![Version](https://img.shields.io/github/v/tag/michaelkrisper/saugi?sort=semver&label=version)](https://github.com/michaelkrisper/saugi/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Biome](https://img.shields.io/badge/code_style-Biome-60a5fa?logo=biome&logoColor=white)](https://biomejs.dev)
-[![PWA](https://img.shields.io/badge/PWA-iOS%20%26%20Android-5a0fc8)](https://saugi.krisperapps.de)
-[![Live](https://img.shields.io/badge/live-saugi.krisperapps.de-2ea44f)](https://saugi.krisperapps.de)
+[![PWA](https://img.shields.io/badge/PWA-iOS%20%26%20Android-5a0fc8)](https://roscoe.krisperapps.de)
+[![Live](https://img.shields.io/badge/live-roscoe.krisperapps.de-2ea44f)](https://roscoe.krisperapps.de)
 
 A fast, minimal remote for Roborock robot vacuums, built as a PWA. One single
 page instead of the official app: start, pause, send it home, plus a live map
 with position, path and restricted zones.
 
-**→ [saugi.krisperapps.de](https://saugi.krisperapps.de)**
+**→ [roscoe.krisperapps.de](https://roscoe.krisperapps.de)**
 
 <p align="center">
   <img src="docs/screenshot.png" width="340" alt="Main screen: status 'Cleaning', 76 % battery, 12.3 m² in 14 minutes, below it the map with coloured rooms, the cleaning path, the robot, the dock, a no-go zone and a no-mop zone, and at the bottom the Pause and Home buttons">
