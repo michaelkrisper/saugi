@@ -469,7 +469,7 @@ async function showApp() {
     const b = e.target.closest('[data-fan]');
     if (b) setFan(Number(b.dataset.fan));
   };
-  $('version').textContent = `Version ${VERSION}`;
+  $('version').textContent = VERSION === 'dev' ? VERSION : `v${VERSION}`;
   $('sched-btn').onclick = openSchedule;
   $('sched-days').onclick = (e) => e.target.closest('[data-day]')?.classList.toggle('on');
   $('sched').querySelector('form').onsubmit = (e) => {
