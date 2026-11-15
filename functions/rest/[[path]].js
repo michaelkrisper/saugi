@@ -15,6 +15,7 @@ export async function onRequest({ request, params }) {
     method: request.method,
     headers,
     body: ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer(),
+    signal: AbortSignal.timeout(30_000),
   });
   return new Response(res.body, {
     status: res.status,

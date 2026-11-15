@@ -3,9 +3,10 @@
 Roscoe (repo/domain `saugi`): a minimal remote for Roborock vacuums as an installable
 web app: start/pause/resume, go home, live map with path and zones. The browser speaks
 the Roborock protocol itself (login, MQTT, AES, map parsing in `public/js/`); two
-stateless Cloudflare Pages Functions only relay bytes to `*.roborock.com`. Vanilla ES
-modules, no build step, no runtime dependencies. Hosted on Cloudflare Pages
-(https://saugi.pages.dev), deployed by CI. UI English.
+stateless relays on Node only pass bytes to `*.roborock.com`. Vanilla ES modules, no
+build step; the server's one runtime dependency is `ws`. Hosted on the own server
+(https://saugi.krisperapps.de: Caddy serves `public/`, a Node service the relays),
+deployed by CI. UI English.
 
 ## Commands
 
@@ -13,17 +14,17 @@ Node 26 (`.nvmrc`).
 
 ```sh
 npm ci
-npm run dev                       # wrangler pages dev (public/ + functions/) on :8792
+npm run dev                       # scripts/dev.mjs (public/ + relays, Node, no Wrangler) on :8792
 npm run check                     # Biome + node:test unit tests = CI job "quality"
 npm run lint:fix                  # apply Biome fixes
 node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrome screenshots
-npm run deploy                    # manual deploy: stamps a copy in dist/, wrangler pages deploy
 ```
 
 - CI (`deploy.yml`, workflow "Deploy"): `quality` on every push/PR; on `main`
-  "Version tag", then `deploy` stamps `public/sw.js` and runs `wrangler pages deploy`.
-  Needs secret `CLOUDFLARE_API_TOKEN` and variable `CLOUDFLARE_ACCOUNT_ID`; without
-  the token the deploy is skipped with a warning.
+  "Version tag", then job `server` ("krisperapps.de") stamps `public/sw.js`, installs
+  `ws` into the upload folder (`npm ci --omit=dev`; the server has no npm), rsyncs it to
+  the server (secret `DEPLOY_SSH_KEY`) and verifies the live site, including a WebSocket
+  handshake. The server restarts the service when `.version` changes. No manual deploy.
 - The browser check is not in CI. It signs in with fake credentials (the broker
   rejects them) and seeds a cached status and the fixture map, so it never drives a
   real vacuum.
@@ -36,10 +37,16 @@ npm run deploy                    # manual deploy: stamps a copy in dist/, wrang
   responses. `crypto.js`: MD5, CRC32, AES-ECB emulated on WebCrypto AES-CBC.
   `map.js`: map parser and rasteriser. `robot.js`: RPC layer (`get_status`,
   `get_map_v1`, ...). `app.js`: UI, polling (map every 3 s while moving), commands.
-- `functions/rest/[[path]].js` and `functions/mqtt.js` (WebSocket <-> TLS 8883 via
-  `cloudflare:sockets`) share the host allowlist in `shared/relay.js`. They exist
-  only because the Roborock REST API sends no CORS headers and the broker speaks raw
-  TLS; keep them stateless and limited to `*.roborock.com`.
+- `functions/rest/[[path]].js` (written as a Pages Function, `onRequest({ request,
+  params })`, and kept that way) and `server/mqtt.js` (WebSocket via `ws` <-> TLS 8883
+  via `node:tls`) share the host allowlist in `shared/relay.js`. They exist only
+  because the Roborock REST API sends no CORS headers and the broker speaks raw TLS;
+  keep them stateless and limited to `*.roborock.com`.
+- `server/node.js`: node:http entry, loopback only. Routes `/rest/*`, `/mqtt` (upgrade)
+  and `/` (Caddy passes directories on, so the entry answers the start page); checks
+  the origin and the body size. Static files never reach it: Caddy serves `public/`
+  (`scripts/dev.mjs` locally). The relays sit on the server's own address: every limit
+  in `docs/SERVER.md` ("What the relays allow") stays, so they cannot serve as a proxy.
 - State: IoT credentials, status and room names in `localStorage` (`saugi.*`), the
   last map in the cache `saugi-data` (written by `app.js`, cleared on sign-out).
 - Only protocol `1.0` devices are supported (S series; developed with an S7,
@@ -62,8 +69,9 @@ npm run deploy                    # manual deploy: stamps a copy in dist/, wrang
 ## Conventions
 
 - Biome (single quotes, 110 columns) covers `public/js`, `public/sw.js`, `functions/`,
-  `shared/`, `tests/`, `scripts/*.mjs`, root JSON; not HTML/CSS.
-- UI text, code, comments and commits English. Dev dependencies only (Biome, wrangler).
+  `server/`, `shared/`, `tests/`, `scripts/*.mjs`, root JSON; not HTML/CSS.
+- UI text, code, comments and commits English. One runtime dependency (`ws`, pure
+  JS, shipped by the deploy), one dev dependency (Biome). Nothing else at runtime.
 
 ## Rules and pitfalls
 
@@ -81,8 +89,11 @@ npm run deploy                    # manual deploy: stamps a copy in dist/, wrang
 - Testing against a real vacuum: only read-only RPCs (`get_status`, `get_map_v1`,
   `get_room_mapping`). Never send movement commands (`app_start`, `app_pause`,
   `app_charge`, ...) without the owner's explicit OK.
-- Locally (wrangler/workerd) binary WebSocket frames arrive as `Blob`, live as
-  `ArrayBuffer`; the MQTT relay handles both. Keep it that way.
+- `tests/node.test.js` runs the bridge against a local TLS echo server with a
+  throwaway `*.roborock.com` certificate (needs `openssl`). A real vacuum is not part
+  of any automated test.
+- Sign-in data lives in `localStorage`, i.e. per address: after a change of address
+  everyone signs in again.
 - A refused MQTT connection (CONNACK 5) can also mean rate limiting, not only invalid
   credentials; the app then shows "Sign-in expired". A retry backoff was considered and
   deliberately not built; only add one if this causes real problems.
@@ -100,5 +111,5 @@ npm run deploy                    # manual deploy: stamps a copy in dist/, wrang
 - PRs auto-merge (squash) once CI and the "Linked ticket" check pass; drafts are not merged.
 - Versions exist only as git tags `vX.Y.Z`. Every merge to `main` tags the next patch;
   never edit version numbers in files. Minor/major releases: Actions -> Release.
-- Merging to `main` deploys to Cloudflare Pages automatically (Deploy workflow).
+- Merging to `main` deploys to the own server automatically (Deploy workflow).
 - Details: CONTRIBUTING.md.

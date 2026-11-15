@@ -24,11 +24,11 @@
 
 ## Development
 
-No build step, no runtime dependencies. Node 26 (see `.nvmrc`).
+No build step; the server's only runtime dependency is `ws`. Node 26 (see `.nvmrc`).
 
 ```sh
 npm ci
-npm run dev      # wrangler pages dev on http://localhost:8792
+npm run dev      # static files + relays on http://localhost:8792
 npm run check    # Biome + tests, as in CI
 node scripts/browser-check.mjs http://localhost:8792   # headless Chrome smoke test
 ```
