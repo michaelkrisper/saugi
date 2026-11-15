@@ -23,11 +23,18 @@ jobs:
       - run: npm ci
       - run: npm run check
 
+  # The own server (https://saugi.krisperapps.de/): Caddy serves public/, Node the relays.
   # Only commits that got a version tag: a re-run of an older run deploys nothing.
-  deploy:
+  # The key may only write into the app's folder there; the server restarts the
+  # app once .version changes.
+  server:
+    name: krisperapps.de
     needs: [quality, version]
     if: needs.version.outputs.version != ''
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-server
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -35,22 +42,50 @@ jobs:
           node-version-file: .nvmrc
       # The service worker's cache names get a content hash of their files.
       - run: node scripts/stamp-sw.mjs public
-      - id: guard
+      - name: Upload
         env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::warning::CLOUDFLARE_API_TOKEN is not set - deploy skipped."
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.guard.outputs.ok == 'true'
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy --branch main
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          echo 'krisperapps.de ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMchrlhQI1OFJ2cEfQosiydiSPg498c/+Mggebk+zVLO' > ~/.ssh/known_hosts
+          mkdir _app
+          cp -r public functions server shared package.json package-lock.json _app/
+          # There is no npm on the server side of the deploy: ship the one runtime package (ws).
+          npm ci --omit=dev --ignore-scripts --prefix _app
+          rsync -rtz --delete --exclude=/.version -e 'ssh -i ~/.ssh/deploy' _app/ deploy@krisperapps.de:./
+          # Last, and written in place: this is what the server watches.
+          echo "$VERSION" > .version
+          rsync -tz --inplace -e 'ssh -i ~/.ssh/deploy' .version deploy@krisperapps.de:./
+      - name: Verify
+        run: |
+          set -euo pipefail
+          live=https://saugi.krisperapps.de
+          check() {
+            for attempt in 1 2 3 4 5; do
+              code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${@:3}" "$live$1" || true)"
+              [ "$code" = "$2" ] && { echo "$1 -> $code"; return 0; }
+              sleep 5
+            done
+            echo "::error::$1 answers $code, expected $2"
+            exit 1
+          }
+          check / 200
+          check /manifest.webmanifest 200
+          check /js/app.js 200
+          # The relays are up, and closed to everything but Roborock and this site.
+          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 426
+          check '/mqtt?host=example.com&port=8883' 403
+          check /rest/example.com/ 403
+          check /rest/euiot.roborock.com/ 403 -H 'Origin: https://example.com'
+          # A real handshake from this site is accepted, one from elsewhere is not.
+          upgrade=(-H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13'
+            -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' --http1.1 --max-time 3)
+          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 101 "${upgrade[@]}" -H "Origin: $live"
+          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 403 "${upgrade[@]}" -H 'Origin: https://example.com'
 
   # Tags every tested commit on main with the next patch version (vX.Y.Z).
   version:

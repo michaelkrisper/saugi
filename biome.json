@@ -10,6 +10,7 @@
       "public/js/**/*.js",
       "public/sw.js",
       "functions/**/*.js",
+      "server/**/*.js",
       "shared/**/*.js",
       "tests/**/*.js",
       "scripts/**/*.mjs",

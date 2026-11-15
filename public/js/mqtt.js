@@ -1,6 +1,6 @@
 // Minimal MQTT 3.1.1 client over a WebSocket byte stream (QoS 0/1, one
 // subscription is all we need). The WebSocket is bridged to TLS port 8883 by
-// functions/mqtt.js because the Roborock broker has no WebSocket listener.
+// server/mqtt.js because the Roborock broker has no WebSocket listener.
 
 import { concat, utf8 } from './crypto.js';
 

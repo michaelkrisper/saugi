@@ -30,7 +30,7 @@ test('only single-label roborock.com subdomains are allowed', () => {
 test('foreign hosts are refused without a request', async () => {
   globalThis.fetch = () => assert.fail('must not fetch');
   const res = await onRequest({
-    request: new Request('https://saugi.pages.dev/rest/evil.com/x'),
+    request: new Request('https://saugi.krisperapps.de/rest/evil.com/x'),
     params: { path: ['evil.com', 'x'] },
   });
   assert.equal(res.status, 403);
@@ -45,7 +45,7 @@ test('path, query, method, body and allowed headers are passed through', async (
       headers: { 'Content-Type': 'application/json', 'Set-Cookie': 'x=1' },
     });
   };
-  const request = new Request('https://saugi.pages.dev/rest/euiot.roborock.com/api/v1/login?a=1&b=2', {
+  const request = new Request('https://saugi.krisperapps.de/rest/euiot.roborock.com/api/v1/login?a=1&b=2', {
     method: 'POST',
     body: 'payload',
     headers: {
@@ -81,7 +81,7 @@ test('GET requests are sent without a body', async () => {
     return new Response('[]');
   };
   await onRequest({
-    request: new Request('https://saugi.pages.dev/rest/euiot.roborock.com/api'),
+    request: new Request('https://saugi.krisperapps.de/rest/euiot.roborock.com/api'),
     params: { path: ['euiot.roborock.com', 'api'] },
   });
   assert.equal(init.method, 'GET');

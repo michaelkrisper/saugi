@@ -4,14 +4,14 @@
 [![Version](https://img.shields.io/github/v/tag/michaelkrisper/saugi?sort=semver&label=version)](https://github.com/michaelkrisper/saugi/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Biome](https://img.shields.io/badge/code_style-Biome-60a5fa?logo=biome&logoColor=white)](https://biomejs.dev)
-[![PWA](https://img.shields.io/badge/PWA-iOS%20%26%20Android-5a0fc8)](https://saugi.pages.dev)
-[![Live](https://img.shields.io/badge/live-saugi.pages.dev-f38020?logo=cloudflare&logoColor=white)](https://saugi.pages.dev)
+[![PWA](https://img.shields.io/badge/PWA-iOS%20%26%20Android-5a0fc8)](https://saugi.krisperapps.de)
+[![Live](https://img.shields.io/badge/live-saugi.krisperapps.de-2ea44f)](https://saugi.krisperapps.de)
 
 A fast, minimal remote for Roborock robot vacuums, built as a PWA. One single
 page instead of the official app: start, pause, send it home, plus a live map
 with position, path and restricted zones.
 
-**→ [saugi.pages.dev](https://saugi.pages.dev)**
+**→ [saugi.krisperapps.de](https://saugi.krisperapps.de)**
 
 <p align="center">
   <img src="docs/screenshot.png" width="340" alt="Main screen: status 'Cleaning', 76 % battery, 12.3 m² in 14 minutes, below it the map with coloured rooms, the cleaning path, the robot, the dock, a no-go zone and a no-mop zone, and at the bottom the Pause and Home buttons">
@@ -58,23 +58,23 @@ The browser speaks the Roborock protocol itself:
 
 It still can't run entirely without a server: the Roborock API sends no CORS
 headers, and the MQTT broker only listens on raw TLS (port 8883), which a
-browser cannot open. Two stateless Cloudflare Pages Functions therefore just
-pass bytes through, and only to `*.roborock.com`:
+browser cannot open. Two stateless relays on a small Node service
+(`server/node.js`) therefore just pass bytes through, only to `*.roborock.com`
+and only for requests from the app's own origin:
 
 - `functions/rest/[[path]].js`: `/rest/<host>/<path>` → `https://<host>/<path>`
-- `functions/mqtt.js`: WebSocket ↔ TLS socket to the broker
+- `server/mqtt.js`: WebSocket ↔ TLS socket to the broker (port 8883)
 
 Device commands stay AES-encrypted with the device key along the way.
 
 ## Development
 
-No build step, no runtime dependencies. Node ≥ 24.
+No build step; the server's only runtime dependency is `ws`. Node 26.
 
 ```sh
 npm install
-npm run dev      # wrangler pages dev on http://localhost:8792
+npm run dev      # static files + relays on http://localhost:8792
 npm run check    # Biome + tests
-npm run deploy   # Cloudflare Pages (branch main), stamps sw.js in a copy (dist/)
 node scripts/browser-check.mjs http://localhost:8792   # headless Chrome smoke test
 ```
 
@@ -86,12 +86,14 @@ The tests run with Node's built-in test runner, no test dependencies:
 | `tests/codec.test.js` | Codec edge cases: PKCS#7 padding at block boundaries, checksum and version rejection, frames without CRC, RPC envelope, HMAC (RFC 4231) |
 | `tests/mqtt.test.js` | MQTT framing against a fake WebSocket: CONNECT, SUBSCRIBE/SUBACK, PUBLISH/PUBACK, packet-id wrap, fragmented frames and multi-byte lengths |
 | `tests/relay.test.js` | The REST relay: host allowlist, forwarded headers, path and query mapping |
+| `tests/node.test.js` | The server entry over real HTTP and WebSocket: the MQTT bridge against a local TLS server, host, port, origin and size limits |
 
 The browser smoke test signs in with deliberately wrong
 credentials, so it never drives a real vacuum.
 
 Every push and pull request goes through lint and tests; pushes to `main` are
-then deployed, as long as the `CLOUDFLARE_API_TOKEN` secret is set. Every
+then deployed to the own server (Caddy for the static files, a Node service
+for the relays; see [docs/SERVER.md](docs/SERVER.md)). Every
 merge to `main` is tagged with the next patch version and only tagged commits
 are deployed; bundled releases with release notes come from the Release
 workflow (see [CONTRIBUTING](CONTRIBUTING.md#versions-and-releases)).
