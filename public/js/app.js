@@ -1,6 +1,7 @@
 import { parseMap, rasterize, toPixel } from './map.js';
 import { Robot } from './robot.js';
 import { deviceTimer, jobName, newJob, parseCron, updatedJob } from './schedule.js';
+import { VERSION } from './version.js';
 
 const STATES = {
   1: 'Starting',
@@ -468,6 +469,7 @@ async function showApp() {
     const b = e.target.closest('[data-fan]');
     if (b) setFan(Number(b.dataset.fan));
   };
+  $('version').textContent = `Version ${VERSION}`;
   $('sched-btn').onclick = openSchedule;
   $('sched-days').onclick = (e) => e.target.closest('[data-day]')?.classList.toggle('on');
   $('sched').querySelector('form').onsubmit = (e) => {

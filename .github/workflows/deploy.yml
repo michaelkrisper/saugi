@@ -40,6 +40,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+      # The app shows its version: the tag, without the "v". Before the hashing below.
+      - name: Stamp version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: printf "export const VERSION = '%s';\n" "${VERSION#v}" > public/js/version.js
       # The service worker's cache names get a content hash of their files.
       - run: node scripts/stamp-sw.mjs public
       - name: Upload
@@ -61,6 +66,8 @@ jobs:
           echo "$VERSION" > .version
           rsync -tz --inplace -e 'ssh -i ~/.ssh/deploy' .version deploy@krisperapps.de:./
       - name: Verify
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
           live=https://roscoe.krisperapps.de
@@ -76,6 +83,7 @@ jobs:
           check / 200
           check /manifest.webmanifest 200
           check /js/app.js 200
+          curl -fsS --max-time 20 "$live/js/version.js" | grep -F "'${VERSION#v}'"
           # The relays are up, and closed to everything but Roborock and this site.
           check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 426
           check '/mqtt?host=example.com&port=8883' 403

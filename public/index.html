@@ -18,6 +18,7 @@
 <link rel="modulepreload" href="/js/mqtt.js">
 <link rel="modulepreload" href="/js/map.js">
 <link rel="modulepreload" href="/js/schedule.js">
+<link rel="modulepreload" href="/js/version.js">
 <style>
   :root { color-scheme: dark; --bg:#111418; --card:#1b2027; --fg:#e8eaed; --dim:#8b939e; --acc:#4f9dff; --ok:#3ccf7a; --warn:#ffb340; --bad:#ff5d5d; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -44,7 +45,8 @@
   #fan button { flex-direction: column; gap: 4px; padding: 8px 0 6px; border-radius: 10px; font: 600 12px system-ui, sans-serif; color: var(--dim); background: none; }
   #fan button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   #fan button.on { color: var(--fg); background: #2c333d; }
-  nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 12px 14px; }
+  nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 12px 8px; }
+  #version { padding-bottom: 6px; text-align: center; color: var(--dim); font-size: 11px; }
   button { appearance: none; border: 0; border-radius: 18px; padding: 20px 0; font: 600 18px system-ui, sans-serif;
            color: var(--fg); background: var(--card); display: flex; align-items: center; justify-content: center; gap: 10px; }
   button svg { width: 24px; height: 24px; fill: currentColor; pointer-events: none; }
@@ -125,6 +127,7 @@
     <button id="main" class="primary" disabled></button>
     <button id="home" disabled><svg viewBox="0 0 24 24"><path d="M12 3 2 12h3v8h5v-6h4v6h5v-8h3z"/></svg>Home</button>
   </nav>
+  <div id="version"></div>
 </main>
 
 <dialog id="sched">

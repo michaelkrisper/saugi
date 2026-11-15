@@ -68,6 +68,14 @@ describe('stamp-sw', () => {
     assert.match(names[0], /^saugi-shell-[0-9a-f]{10}$/);
     assert.match(names[1], /^saugi-assets-[0-9a-f]{10}$/);
   });
+
+  test('the version file is part of the shell and holds "dev" in the repo', () => {
+    const sw = readFileSync(join(root, 'sw.js'), 'utf8');
+    assert.ok(
+      sw.slice(sw.indexOf('const SHELL = ['), sw.indexOf('const ASSETS =')).includes("'/js/version.js'"),
+    );
+    assert.match(readFileSync(join(root, 'js/version.js'), 'utf8'), /^export const VERSION = 'dev';$/m);
+  });
 });
 
 /** Loads the real sw.js with fake caches holding the given cache names and entries. */
