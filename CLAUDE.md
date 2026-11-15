@@ -22,7 +22,7 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
 
 - CI (`deploy.yml`, workflow "Deploy"): `quality` on every push/PR; on `main`
   "Version tag", then job `server` ("krisperapps.de") writes the tag into
-  `public/js/version.js` (the repo holds `dev`; shown at the bottom of the main screen),
+  `public/js/version.js` (the repo holds `dev`; shown at the bottom of the main screen as `v1.2.3`),
   stamps `public/sw.js`, installs
   `ws` into the upload folder (`npm ci --omit=dev`; the server has no npm), rsyncs it to
   the server (secret `DEPLOY_SSH_KEY`) and verifies the live site, including a WebSocket
