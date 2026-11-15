@@ -83,6 +83,13 @@ try {
   if (!(await evaluate("!document.getElementById('login').hidden")))
     throw new Error('login screen not shown');
   await shot('saugi-login');
+  const legal = () =>
+    evaluate(
+      "[...document.querySelectorAll('.legal')].filter((e) => e.offsetParent).map((e) => [...e.querySelectorAll('a')].map((a) => a.href).join(' ')).join('|')",
+    );
+  const links =
+    'https://krisperapps.de/impressum https://krisperapps.de/datenschutz#roscoe https://krisperapps.de/nutzung';
+  if ((await legal()) !== links) throw new Error('legal links missing on the login screen');
 
   const map = readFileSync(new URL(process.env.MAP ?? '../tests/fixtures/s6.bin', import.meta.url)).toString(
     'base64',
@@ -105,6 +112,7 @@ try {
   );
   console.info(state);
   await shot('saugi-main');
+  if ((await legal()) !== links) throw new Error('legal links missing on the main screen');
   if (!state.mapShown) throw new Error('cached map was not drawn');
   if (!/Sign-in expired/.test(state.banner))
     throw new Error(`expected broker to reject fake login, got: ${state.banner}`);
