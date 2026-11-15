@@ -4,13 +4,19 @@
 import { ALLOWED_HOST } from '../../shared/relay.js';
 
 const FORWARD = /^(authorization|content-type|header_[a-z]+|x-mercy-ks?)$/;
+// Roborock's header_<name> arrives as x-roborock-<name>: the web server in
+// front drops header names that contain an underscore.
+const RENAMED = /^x-roborock-([a-z]+)$/;
 
 export async function onRequest({ request, params }) {
   const [host, ...rest] = params.path;
   if (!ALLOWED_HOST.test(host)) return new Response('forbidden', { status: 403 });
   const target = `https://${host}/${rest.join('/')}${new URL(request.url).search}`;
   const headers = new Headers();
-  for (const [k, v] of request.headers) if (FORWARD.test(k)) headers.set(k, v);
+  for (const [k, v] of request.headers) {
+    if (FORWARD.test(k)) headers.set(k, v);
+    else if (RENAMED.test(k)) headers.set(k.replace(RENAMED, 'header_$1'), v);
+  }
   const res = await fetch(target, {
     method: request.method,
     headers,
