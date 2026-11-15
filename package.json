@@ -14,8 +14,8 @@
     "check": "npm run lint && npm test"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.5",
-    "wrangler": "^4.158.0"
+    "@biomejs/biome": "^2.6.7",
+    "wrangler": "^4.160.1"
   },
   "engines": {
     "node": ">=26"
