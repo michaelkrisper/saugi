@@ -4,27 +4,37 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { onRequest } from '../functions/rest/[[path]].js';
-import { ALLOWED_HOST } from '../shared/relay.js';
+import { MQTT_HOST, REST_HOST } from '../shared/relay.js';
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-test('only single-label roborock.com subdomains are allowed', () => {
-  for (const host of ['euiot.roborock.com', 'api-eu.roborock.com', 'mqtt-eu-3.roborock.com'])
-    assert.ok(ALLOWED_HOST.test(host), host);
+test('only the regional Roborock hosts the app uses are allowed', () => {
+  for (const host of [
+    'euiot.roborock.com',
+    'usiot.roborock.com',
+    'api-eu.roborock.com',
+    'api-cn-2.roborock.com',
+  ])
+    assert.ok(REST_HOST.test(host) && !MQTT_HOST.test(host), host);
+  for (const host of ['mqtt-eu-3.roborock.com', 'mqtt-us.roborock.com'])
+    assert.ok(MQTT_HOST.test(host) && !REST_HOST.test(host), host);
   for (const host of [
     'roborock.com',
+    'www.roborock.com',
+    'wood-eu.roborock.com',
+    'xxiot.roborock.com',
     'evil.com',
     'euiot.roborock.com.evil.com',
     'evilroborock.com',
-    'a.b.roborock.com',
+    'a.euiot.roborock.com',
     'euiot.roborock.com:8080',
     'user@euiot.roborock.com',
     'EUIOT.ROBOROCK.COM',
   ])
-    assert.ok(!ALLOWED_HOST.test(host), host);
+    assert.ok(!REST_HOST.test(host) && !MQTT_HOST.test(host), host);
 });
 
 test('foreign hosts are refused without a request', async () => {
@@ -88,4 +98,51 @@ test('GET requests are sent without a body', async () => {
   });
   assert.equal(init.method, 'GET');
   assert.equal(init.body, undefined);
+});
+
+test('the query may travel in a header instead of the URL', async () => {
+  let seen;
+  globalThis.fetch = async (url, init) => {
+    seen = { url, init };
+    return new Response('{}');
+  };
+  await onRequest({
+    request: new Request('https://roscoe.krisperapps.de/rest/euiot.roborock.com/api/v1/getUrlByEmail', {
+      method: 'POST',
+      headers: { 'x-relay-query': 'email=a%2Bb%40example.com&needtwostepauth=false' },
+    }),
+    params: { path: ['euiot.roborock.com', 'api', 'v1', 'getUrlByEmail'] },
+  });
+  assert.equal(
+    seen.url,
+    'https://euiot.roborock.com/api/v1/getUrlByEmail?email=a%2Bb%40example.com&needtwostepauth=false',
+  );
+  assert.equal(seen.init.headers.has('x-relay-query'), false);
+});
+
+test('a redirect is not followed', async () => {
+  let init;
+  globalThis.fetch = async (_url, i) => {
+    init = i;
+    return new Response(null, { status: 302, headers: { Location: 'http://127.0.0.1:8806/' } });
+  };
+  const res = await onRequest({
+    request: new Request('https://roscoe.krisperapps.de/rest/euiot.roborock.com/x'),
+    params: { path: ['euiot.roborock.com', 'x'] },
+  });
+  assert.equal(init.redirect, 'manual');
+  assert.equal(res.status, 502);
+  assert.equal(res.headers.get('Location'), null);
+});
+
+test('whatever the upstream host sends is labelled JSON and cannot run as a page', async () => {
+  globalThis.fetch = async () =>
+    new Response('<script>alert(1)</script>', { headers: { 'Content-Type': 'text/html' } });
+  const res = await onRequest({
+    request: new Request('https://roscoe.krisperapps.de/rest/euiot.roborock.com/x'),
+    params: { path: ['euiot.roborock.com', 'x'] },
+  });
+  assert.equal(res.headers.get('Content-Type'), 'application/json');
+  assert.equal(res.headers.get('X-Content-Type-Options'), 'nosniff');
+  assert.equal(res.headers.get('Content-Security-Policy'), "sandbox; default-src 'none'");
 });

@@ -39,14 +39,24 @@ Anything else answers 404.
 The relays run on the server's own address, so they must not be usable as a
 proxy for anything but this app talking to Roborock:
 
-- Target host: only `<label>.roborock.com` (`shared/relay.js`), reached with
-  TLS and a verified certificate. MQTT only on port 8883, REST only on 443.
+- Target host: only the regional Roborock hosts the app uses (`shared/relay.js`):
+  `<region>iot` and `api-<region>` over REST, `mqtt-<region>` over MQTT, reached
+  with TLS and a verified certificate. MQTT only on port 8883, REST only on 443;
+  a redirect is not followed (502).
 - Origin: a request that names another site (`Origin`, `Sec-Fetch-Site`) is
-  refused; the WebSocket handshake must carry this site's `Origin`.
+  refused; the WebSocket handshake and every REST request other than GET/HEAD
+  must carry this site's `Origin`.
+- Per client (the address Caddy passes as `CF-Connecting-IP`, IPv6 by /64; kept
+  in memory only): 30 REST requests per minute, 6 code mail requests per
+  10 minutes (429 beyond that), 3 MQTT bridges.
 - REST: only the headers the API needs are forwarded, request bodies up to
-  256 KB, 30 s per request, nothing but `Content-Type` comes back as a header.
-- MQTT: frames from the browser up to 256 KB, 10 s to reach the broker, closed
-  after 120 s without traffic, at most 16 bridges at a time.
+  256 KB, 30 s per request. Answers are always labelled JSON, with `nosniff` and
+  a sandboxing `Content-Security-Policy`, whatever the upstream host sends. The
+  app sends the query string (e-mail address, sign-in code) in the header
+  `X-Relay-Query`; the relay puts it back into the URL for Roborock.
+- MQTT: frames from the browser up to 256 KB, 10 s until the broker has
+  accepted the sign-in (CONNACK), closed after 120 s without traffic, at most
+  16 bridges at a time.
 
 ## Headers for static files
 
