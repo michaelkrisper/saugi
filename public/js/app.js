@@ -304,8 +304,10 @@ function draw() {
     ctx.fillText(name, x, y);
   }
 
+  // The map is the first vacuum's; its path, dock and position are not the second's.
+  const own = active !== 'mi';
   const path = map.path;
-  if (path.length >= 4) {
+  if (own && path.length >= 4) {
     ctx.strokeStyle = 'rgba(255,255,255,.8)';
     ctx.lineWidth = Math.max(1.5, s * 0.6);
     ctx.lineJoin = ctx.lineCap = 'round';
@@ -320,14 +322,14 @@ function draw() {
 
   drawMi(ctx, P);
 
-  if (map.charger) {
+  if (own && map.charger) {
     const [x, y] = P(map.charger.x, map.charger.y);
     ctx.fillStyle = '#3ccf7a';
     ctx.beginPath();
     ctx.arc(x, y, 8, 0, 2 * Math.PI);
     ctx.fill();
   }
-  if (map.robot) {
+  if (own && map.robot) {
     const [x, y] = P(map.robot.x, map.robot.y);
     const r = Math.max(9, s * 3.5);
     const a = (map.robot.a * Math.PI) / 180;
