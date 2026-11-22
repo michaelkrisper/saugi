@@ -7,6 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { createServer, STATUS_CODES } from 'node:http';
 import { Readable } from 'node:stream';
+import { onRequest as mi } from '../functions/mi/[[path]].js';
 import { onRequest as rest } from '../functions/rest/[[path]].js';
 import { clientKey, createLimiter } from './limit.js';
 import { createMqttRelay, target } from './mqtt.js';
@@ -18,6 +19,12 @@ const MAX_BODY = 256 * 1024;
 const REST_LIMIT = { capacity: 30, perMs: 60_000 };
 // The two calls that make Roborock send a code mail: three sign-in attempts.
 const CODE_LIMIT = { capacity: 6, perMs: 600_000 };
+
+// The Xiaomi Home vacuum has no push channel: its status is polled, every 3 s
+// while it moves.
+const MI_LIMIT = { capacity: 60, perMs: 60_000 };
+// Password attempts and the calls that make Xiaomi send a code.
+const MI_SIGNIN_LIMIT = { capacity: 10, perMs: 600_000 };
 
 const INDEX = new URL('../public/index.html', import.meta.url);
 
@@ -104,10 +111,18 @@ async function handle(incoming, limits) {
       headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' },
     });
   }
-  if (!url.pathname.startsWith('/rest/')) return text('not found', 404);
+  const toMi = url.pathname.startsWith('/mi/');
+  if (!toMi && !url.pathname.startsWith('/rest/')) return text('not found', 404);
   const reads = ['GET', 'HEAD'].includes(incoming.method);
   if (!sameOrigin(incoming.headers, !reads)) return text('forbidden', 403);
   const client = clientKey(incoming);
+  if (toMi) {
+    const signsIn = /serviceloginauth2$|ticket$/i.test(url.pathname);
+    if (!limits.mi(client) || (signsIn && !limits.miSignIn(client))) return busy();
+    const request = await toRequest(incoming);
+    if (!request) return text('too large', 413);
+    return mi({ request, params: { path: url.pathname.slice('/mi/'.length).split('/') } });
+  }
   if (!limits.rest(client) || (sendsCode(url.pathname) && !limits.code(client))) return busy();
   const request = await toRequest(incoming);
   if (!request) return text('too large', 413);
@@ -122,7 +137,12 @@ function refuse(socket, status) {
 /** `options` go to the MQTT relay (tests replace the upstream connection). */
 export function createApp(options) {
   const mqtt = createMqttRelay(options);
-  const limits = { rest: createLimiter(REST_LIMIT), code: createLimiter(CODE_LIMIT) };
+  const limits = {
+    rest: createLimiter(REST_LIMIT),
+    code: createLimiter(CODE_LIMIT),
+    mi: createLimiter(MI_LIMIT),
+    miSignIn: createLimiter(MI_SIGNIN_LIMIT),
+  };
   const app = createServer(async (incoming, outgoing) => {
     try {
       const response = await handle(incoming, limits);

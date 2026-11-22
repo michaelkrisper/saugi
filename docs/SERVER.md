@@ -30,6 +30,7 @@ to the Node service, WebSocket upgrades included:
 |---|---|
 | `/` | start page (`public/index.html`; Caddy's `file` matcher does not match a directory) |
 | `/rest/<host>/<path>` | HTTPS relay to the Roborock REST API |
+| `/mi/<host>/<path>` | HTTPS relay to the Xiaomi cloud (second vacuum from Xiaomi Home) |
 | `/mqtt?host=<host>&port=8883` | WebSocket, bridged to a TLS connection to the Roborock MQTT broker |
 
 Anything else answers 404.
@@ -37,7 +38,8 @@ Anything else answers 404.
 ## What the relays allow
 
 The relays run on the server's own address, so they must not be usable as a
-proxy for anything but this app talking to Roborock:
+proxy for anything but this app talking to Roborock (and, for a second vacuum
+from Xiaomi Home, to the Xiaomi cloud):
 
 - Target host: only the regional Roborock hosts the app uses (`shared/relay.js`):
   `<region>iot` and `api-<region>` over REST, `mqtt-<region>` over MQTT, reached
@@ -54,6 +56,13 @@ proxy for anything but this app talking to Roborock:
   a sandboxing `Content-Security-Policy`, whatever the upstream host sends. The
   app sends the query string (e-mail address, sign-in code) in the header
   `X-Relay-Query`; the relay puts it back into the URL for Roborock.
+- Xiaomi (`/mi/`): only `account.xiaomi.com` and the `api.io.mi.com` hosts (regions
+  and `sts`), same origin rule, body size, timeout and answer labelling as REST
+  (`application/octet-stream`). 60 requests per minute per client (the vacuum's
+  status is polled), 10 password or code-sending calls per 10 minutes. A redirect is
+  not followed but handed to the app (`x-mi-status`, `x-mi-headers`), which requests
+  the next hop through the same allowlist; cookies travel in `x-mi-cookie` /
+  `x-mi-set-cookie`, the query in `X-Relay-Query`.
 - MQTT: frames from the browser up to 256 KB, 10 s until the broker has
   accepted the sign-in (CONNACK), closed after 120 s without traffic, at most
   16 bridges at a time.
@@ -67,7 +76,7 @@ Static files never reach Node, so Caddy sets their headers. The app needs one:
 | all static files | `Cache-Control: no-cache` | a new version must be seen at once (as on the former host); the service worker does the caching |
 
 ```caddy
-@static_files not path /rest/* /mqtt
+@static_files not path /rest/* /mi/* /mqtt
 header @static_files Cache-Control no-cache
 ```
 
