@@ -98,6 +98,14 @@ const busy = () =>
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 
+async function handleMi(incoming, url, client, limits) {
+  const signsIn = /serviceloginauth2$|ticket$/i.test(url.pathname);
+  if (!limits.mi(client) || (signsIn && !limits.miSignIn(client))) return busy();
+  const request = await toRequest(incoming);
+  if (!request) return text('too large', 413);
+  return mi({ request, params: { path: url.pathname.slice('/mi/'.length).split('/') } });
+}
+
 async function handle(incoming, limits) {
   const url = parse(incoming);
   if (!url) return text('bad request', 400);
@@ -116,13 +124,7 @@ async function handle(incoming, limits) {
   const reads = ['GET', 'HEAD'].includes(incoming.method);
   if (!sameOrigin(incoming.headers, !reads)) return text('forbidden', 403);
   const client = clientKey(incoming);
-  if (toMi) {
-    const signsIn = /serviceloginauth2$|ticket$/i.test(url.pathname);
-    if (!limits.mi(client) || (signsIn && !limits.miSignIn(client))) return busy();
-    const request = await toRequest(incoming);
-    if (!request) return text('too large', 413);
-    return mi({ request, params: { path: url.pathname.slice('/mi/'.length).split('/') } });
-  }
+  if (toMi) return handleMi(incoming, url, client, limits);
   if (!limits.rest(client) || (sendsCode(url.pathname) && !limits.code(client))) return busy();
   const request = await toRequest(incoming);
   if (!request) return text('too large', 413);

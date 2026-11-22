@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { deviceTimer, formatCron, jobName, newJob, parseCron, updatedJob } from '../public/js/schedule.js';
+import {
+  deviceTimer,
+  formatCron,
+  jobName,
+  miTimer,
+  newJob,
+  parseCron,
+  parseMiTimers,
+  updatedJob,
+} from '../public/js/schedule.js';
 
 // Crons as written by the Roborock app (S7): weekdays 10:00, Sunday only.
 test('parses Roborock app crons', () => {
@@ -77,4 +86,21 @@ test('device timer mirrors the cloud job', () => {
       ],
     ],
   ]);
+});
+
+// Shapes from python-miio (get_timer result, add_timer parameters).
+test('Xiaomi Home timers: the oldest is the schedule, a new one is a set_timer entry', () => {
+  assert.deepEqual(
+    parseMiTimers([
+      ['1488667794112', 'on', ['30 8 * * 1,2,3,4,5', ['start_clean', '']]],
+      ['1488667777661', 'off', ['49 21 * * 3,4,5,6', ['start_clean', '']]],
+    ]),
+    { id: '1488667777661', enabled: false, cron: '49 21 * * 3,4,5,6' },
+  );
+  assert.equal(parseMiTimers([]), null);
+  assert.deepEqual(miTimer(1488667794112, { hour: 8, minute: 30, days: [5, 1, 3] }), [
+    '1488667794112',
+    ['30 8 * * 1,3,5', ['start_clean', '']],
+  ]);
+  assert.deepEqual(parseCron('30 8 * * 1,3,5'), { hour: 8, minute: 30, days: [1, 3, 5] });
 });

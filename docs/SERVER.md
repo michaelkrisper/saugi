@@ -56,7 +56,7 @@ from Xiaomi Home, to the Xiaomi cloud):
   a sandboxing `Content-Security-Policy`, whatever the upstream host sends. The
   app sends the query string (e-mail address, sign-in code) in the header
   `X-Relay-Query`; the relay puts it back into the URL for Roborock.
-- Xiaomi (`/mi/`): only `account.xiaomi.com` and the `api.io.mi.com` hosts (regions
+- Xiaomi (`/mi/`): only `account.xiaomi.com`, the map store `<name>.fds.api.xiaomi.com` and the `api.io.mi.com` hosts (regions
   and `sts`), same origin rule, body size, timeout and answer labelling as REST
   (`application/octet-stream`). 60 requests per minute per client (the vacuum's
   status is polled), 10 password or code-sending calls per 10 minutes. A redirect is

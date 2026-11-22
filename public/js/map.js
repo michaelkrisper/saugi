@@ -93,7 +93,7 @@ const FLOOR = rgb('#2c333d');
 const GREY = rgb('#7d8590');
 const ROOM_RGB = ROOM_COLORS.map(rgb);
 
-const isRoom = (t) => t !== 0xff && t !== 7 && (t & 7) === 7;
+export const isRoom = (t) => t !== 0xff && t !== 7 && (t & 7) === 7;
 
 function pixelColor(t) {
   if (t === 1) return WALL;

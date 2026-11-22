@@ -16,6 +16,8 @@ const SHELL = [
   '/js/protocol.js',
   '/js/robot.js',
   '/js/schedule.js',
+  '/js/litemap.js',
+  '/js/align.js',
   '/js/version.js',
   '/js/xiaomi.js',
   '/manifest.webmanifest',

@@ -1,6 +1,8 @@
+import { fitLiteMap, liteToMm } from './align.js';
+import { FIELD_MM, FLOOR, parseLiteMap, SIZE } from './litemap.js';
 import { parseMap, rasterize, toPixel } from './map.js';
 import { Robot } from './robot.js';
-import { deviceTimer, jobName, newJob, parseCron, updatedJob } from './schedule.js';
+import { deviceTimer, jobName, miTimer, newJob, parseCron, parseMiTimers, updatedJob } from './schedule.js';
 import { VERSION } from './version.js';
 import { COUNTRIES, MiCloud, MiLogin, MiRobot, relayHttp } from './xiaomi.js';
 
@@ -53,7 +55,11 @@ let lastMap = 0;
 // A second vacuum from Xiaomi Home (cfg.mi): { robot, status }. `active` is what the
 // controls act on: 'rr' (the Roborock account's vacuum), 'mi' or 'all'.
 let mi = null;
-let miTimer = null;
+let miPoll = null;
+let miFastUntil = 0;
+// The second vacuum's last run laid onto the map: { id, robot, fit, canvas }.
+let miMap = null;
+let miMapDue = true;
 // Next to a second vacuum the first goes by the app's name instead of its model name.
 const RR_NAME = 'Roscoe';
 let active = (cfg?.mi && localStorage.getItem(`${STORE}.active`)) || 'rr';
@@ -157,8 +163,9 @@ function render() {
     );
     b.disabled = !live.length || busy;
   }
-  // The schedule belongs to the Roborock account's vacuum.
-  $('sched-btn').hidden = active === 'mi';
+  // Each vacuum has its own schedule, so there is none for "all".
+  $('sched-btn').hidden = active === 'all';
+  $('sched-btn').classList.toggle('on', !!(active === 'mi' ? miJob : job)?.enabled);
   for (const b of $('who').children) b.classList.toggle('on', b.dataset.who === active);
 }
 
@@ -248,6 +255,8 @@ function draw() {
     ctx.stroke();
   }
 
+  drawMi(ctx, P);
+
   if (map.charger) {
     const [x, y] = P(map.charger.x, map.charger.y);
     ctx.fillStyle = '#3ccf7a';
@@ -271,6 +280,28 @@ function draw() {
     ctx.arc(x + Math.cos(a) * r * 0.5, y - Math.sin(a) * r * 0.5, r * 0.3, 0, 2 * Math.PI);
     ctx.fill();
   }
+}
+
+// Where the second vacuum cleaned on its last run and where it stopped.
+function drawMi(ctx, P) {
+  if (!miMap?.fit || active === 'rr') return;
+  const at = (u, v) => P(...liteToMm(miMap.fit, u, v));
+  const [x0, y0] = at(0, 0);
+  const [x1, y1] = at(1, 0);
+  const [x2, y2] = at(0, 1);
+  ctx.save();
+  ctx.transform(x1 - x0, y1 - y0, x2 - x0, y2 - y0, x0, y0);
+  ctx.drawImage(miMap.canvas, 0, 0);
+  ctx.restore();
+  if (!miMap.robot) return;
+  const [x, y] = at(miMap.robot.x / FIELD_MM, miMap.robot.y / FIELD_MM);
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#ff9d3c';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x, y, 7, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
 }
 
 function setMap(raw, persist) {
@@ -393,10 +424,14 @@ async function send(action) {
       if (s.in_cleaning === 3) method = 'resume_segment_clean';
     }
     await r.rpc(method);
+    // Show the new state at once; the next status confirms it.
+    s.state = { start: 5, pause: 10, home: 6 }[action];
   });
   lastMap = 0;
   schedule(800);
-  scheduleMi(800);
+  // The cloud reports the old state for a moment, so ask a little later, then often.
+  miFastUntil = Date.now() + 30000;
+  scheduleMi(2500);
 }
 
 function setFan(power) {
@@ -413,11 +448,36 @@ function setFan(power) {
   });
 }
 
-// --- second vacuum (Xiaomi Home): polled over the Xiaomi cloud, no push, no map ---
+// --- second vacuum (Xiaomi Home): polled over the Xiaomi cloud, no push, no live map ---
 
 function scheduleMi(ms) {
-  clearTimeout(miTimer);
-  if (mi) miTimer = setTimeout(pollMi, ms);
+  clearTimeout(miPoll);
+  if (mi) miPoll = setTimeout(pollMi, ms);
+}
+
+// The vacuum stores a map only after a run, in a frame of its own: fetch it once it
+// rests and fit it onto the first vacuum's map.
+async function loadMiMap() {
+  miMapDue = false;
+  try {
+    const last = await mi.robot.lastMap();
+    if (!last || last.id === miMap?.id) return;
+    const lite = parseLiteMap(last.bytes);
+    const fit = lite.fields && (await fitLiteMap(lite.fields, map.image));
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = SIZE;
+    if (fit) {
+      const img = new ImageData(SIZE, SIZE);
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        if (lite.fields[i] === FLOOR) img.data.set([255, 157, 60, 90], i * 4);
+      }
+      canvas.getContext('2d').putImageData(img, 0, 0);
+    }
+    miMap = { id: last.id, robot: lite.robot, fit, canvas };
+    draw();
+  } catch {
+    // No map is no reason for a banner; the next run asks again.
+  }
 }
 
 async function pollMi() {
@@ -425,7 +485,9 @@ async function pollMi() {
   try {
     mi.status = await mi.robot.status();
     localStorage.setItem(`${STORE}.mi.status`, JSON.stringify(mi.status));
-    scheduleMi(isMoving(mi.status) ? 3000 : 15000);
+    scheduleMi(isMoving(mi.status) || Date.now() < miFastUntil ? 3000 : 15000);
+    if (isMoving(mi.status)) miMapDue = true;
+    else if (miMapDue && map?.image) loadMiMap();
   } catch (err) {
     if (active !== 'rr') banner(`${cfg.mi.device.name}: ${err.message}`);
     scheduleMi(15000);
@@ -488,6 +550,8 @@ function openMiLogin() {
 }
 
 function removeMi() {
+  miMap = null;
+  miMapDue = true;
   delete cfg.mi;
   save();
   localStorage.removeItem(`${STORE}.mi.status`);
@@ -498,6 +562,7 @@ function removeMi() {
 // --- schedule: the oldest job the vacuum knows, created on first save if there is none ---
 
 let job = null;
+let miJob = null;
 
 async function loadJob() {
   const { getJobs } = await import('./api.js');
@@ -508,7 +573,12 @@ async function loadJob() {
   const known = new Set((Array.isArray(timers[0]) ? timers : [timers]).map(([name]) => name));
   // The cloud reorders jobs on edit; take the oldest so it stays the same one.
   job = jobs.filter((j) => known.has(jobName(j))).sort((a, b) => a.id - b.id)[0] ?? null;
-  $('sched-btn').classList.toggle('on', !!job?.enabled);
+  render();
+}
+
+async function loadMiJob() {
+  miJob = parseMiTimers(await mi.robot.rpc('get_timer'));
+  render();
 }
 
 async function openSchedule() {
@@ -516,10 +586,12 @@ async function openSchedule() {
   $('sched-save').disabled = true;
   $('sched').showModal();
   try {
-    if (!robot?.connected) throw new Error('the vacuum is offline');
-    await loadJob();
-    const { hour, minute, days } = job ? parseCron(job.cron) : { hour: 10, minute: 0, days: [1, 2, 3, 4, 5] };
-    $('sched-on').checked = job ? job.enabled : true;
+    const forMi = active === 'mi';
+    if (!(forMi ? mi.robot : robot)?.connected) throw new Error('the vacuum is offline');
+    await (forMi ? loadMiJob() : loadJob());
+    const j = forMi ? miJob : job;
+    const { hour, minute, days } = j ? parseCron(j.cron) : { hour: 10, minute: 0, days: [1, 2, 3, 4, 5] };
+    $('sched-on').checked = j ? j.enabled : true;
     $('sched-time').value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
     for (const b of $('sched-days').children) b.classList.toggle('on', days.includes(Number(b.dataset.day)));
     $('sched-save').disabled = false;
@@ -536,6 +608,7 @@ async function saveSchedule() {
     return;
   }
   const plan = { hour, minute, days, enabled: $('sched-on').checked };
+  if (active === 'mi') return saveMiSchedule(plan);
   const { addJob, putJob } = await import('./api.js');
   const { rriot } = cfg.userData;
   const { duid } = cfg.device;
@@ -551,6 +624,29 @@ async function saveSchedule() {
     else await addJob(rriot, duid, next);
     await robot.rpc('upd_server_timer', [[jobName(next), plan.enabled ? 'on' : 'off']]);
     await loadJob();
+    $('sched').close();
+  } catch (err) {
+    $('sched-error').textContent = `Could not save: ${err.message}`;
+  } finally {
+    $('sched-save').disabled = false;
+  }
+}
+
+// A timer cannot be edited: the new one is set first, then the old one removed, so
+// a failure in between never leaves the vacuum without its schedule.
+async function saveMiSchedule(plan) {
+  $('sched-save').disabled = true;
+  try {
+    if (!mi.robot.connected) throw new Error('the vacuum is offline');
+    const next = miTimer(Date.now(), plan);
+    if (miJob?.cron === next[1][0]) {
+      await mi.robot.rpc('upd_timer', [miJob.id, plan.enabled ? 'on' : 'off']);
+    } else {
+      await mi.robot.rpc('set_timer', [next]);
+      if (!plan.enabled) await mi.robot.rpc('upd_timer', [next[0], 'off']);
+      if (miJob) await mi.robot.rpc('del_timer', [miJob.id]);
+    }
+    await loadMiJob();
     $('sched').close();
   } catch (err) {
     $('sched-error').textContent = `Could not save: ${err.message}`;
@@ -617,15 +713,16 @@ async function showApp() {
       localStorage.setItem(`${STORE}.active`, active);
       banner('');
       render();
+      draw();
     };
     render();
-    pollMi();
+    pollMi().then(() => loadMiJob().catch(() => {}));
   }
   new ResizeObserver(draw).observe($('map'));
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       clearTimeout(pollTimer);
-      clearTimeout(miTimer);
+      clearTimeout(miPoll);
       robot?.close();
       robot = null;
     } else {

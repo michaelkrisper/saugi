@@ -22,6 +22,20 @@ export function formatCron({ hour, minute, days }) {
   return `${pad(minute)} ${pad(hour)} ? * ${[...days].sort().join(',')}`;
 }
 
+// The Xiaomi Home vacuum keeps its timers itself, in its own time zone:
+// get_timer gives [id, 'on' | 'off', [cron, [command, params]]], set_timer takes
+// [id, [cron, [command, params]]] (python-miio; the vacuum ignores command and params).
+export const miTimer = (id, { hour, minute, days }) => [
+  String(id),
+  [`${minute} ${hour} * * ${[...days].sort().join(',')}`, ['start_clean', '']],
+];
+
+// The oldest timer, so it stays the same one, as { id, enabled, cron }.
+export function parseMiTimers(timers) {
+  const [t] = [...(timers ?? [])].sort((a, b) => Number(a[0]) - Number(b[0]));
+  return t ? { id: String(t[0]), enabled: t[1] === 'on', cron: t[2][0] } : null;
+}
+
 export const jobName = (job) => job?.param?.params?.[0]?.name;
 
 // set_server_timer parameter: [name, [cron, ['start_clean', params without name]]].
