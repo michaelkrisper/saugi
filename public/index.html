@@ -55,9 +55,9 @@
   button.primary { background: var(--acc); color: #fff; }
   button:active { transform: scale(.97); }
   button:disabled { opacity: .45; }
-  #login { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 24px; max-width: 420px; width: 100%; margin: 0 auto; }
-  #login h1 { margin: 0 0 4px; font-size: 28px; }
-  #login p { margin: 0; color: var(--dim); }
+  #login, #lock { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 24px; max-width: 420px; width: 100%; margin: 0 auto; }
+  #login h1, #lock h1 { margin: 0 0 4px; font-size: 28px; }
+  #login p, #lock p { margin: 0; color: var(--dim); }
   input { font: 18px system-ui, sans-serif; padding: 16px; border-radius: 14px; border: 1px solid #2c333d; background: var(--card); color: var(--fg);
           -webkit-user-select: text; user-select: text; }
   input:focus { outline: 2px solid var(--acc); border-color: transparent; }
@@ -90,6 +90,14 @@
 </style>
 </head>
 <body>
+
+<form id="lock" hidden>
+  <h1>Roscoe</h1>
+  <p>This app is private. Enter the code word.</p>
+  <input id="lock-code" type="password" autocomplete="current-password" placeholder="Code word" required>
+  <button class="primary" id="lock-btn">Unlock</button>
+  <div id="lock-error" style="color: var(--bad)"></div>
+</form>
 
 <form id="login" hidden>
   <h1>Roscoe</h1>

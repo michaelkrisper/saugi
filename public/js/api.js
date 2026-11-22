@@ -10,6 +10,12 @@ const BASE_URLS = [
   'https://ruiot.roborock.com',
 ];
 
+// The server runs this module too and reaches the relay function without the network.
+let send = (path, init) => fetch(path, init);
+export function useTransport(fn) {
+  send = fn;
+}
+
 function relay(url) {
   const u = new URL(url);
   return `/rest/${u.host}${u.pathname}${u.search}`;
@@ -32,7 +38,7 @@ async function call(url, { method = 'POST', params, form, body, headers = {} } =
     init.body = body;
     init.headers['Content-Type'] = 'application/json';
   }
-  const res = await fetch(relay(u.href), init);
+  const res = await send(relay(u.href), init);
   const text = await res.text();
   try {
     return JSON.parse(text);

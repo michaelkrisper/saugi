@@ -1,11 +1,12 @@
 # CLAUDE.md
 
 Roscoe (repo/domain `saugi`): a minimal remote for Roborock vacuums as an installable
-web app: start/pause/resume, go home, live map with path and zones. The browser speaks
-the Roborock protocol itself (login, MQTT, AES, map parsing in `public/js/`); two
-stateless relays on Node only pass bytes to `*.roborock.com`. Vanilla ES modules, no
-build step; the server's one runtime dependency is `ws`. Hosted on the own server
-(https://roscoe.krisperapps.de: Caddy serves `public/`, a Node service the relays),
+web app: start/pause/resume, go home, live map with path and zones. Private: a code
+word opens it. The server holds the vacuums' sign-in and speaks the Roborock protocol
+(login, MQTT, AES in `public/js/`, run by Node); the browser talks only to the
+server's `/api` and never gets a key. Vanilla ES modules, no build step; the server's
+one runtime dependency is `ws`. Hosted on the own server
+(https://roscoe.krisperapps.de: Caddy serves `public/`, a Node service the rest),
 deployed by CI. UI English.
 
 ## Commands
@@ -14,7 +15,7 @@ Node 26 (`.nvmrc`).
 
 ```sh
 npm ci
-npm run dev                       # scripts/dev.mjs (public/ + relays, Node, no Wrangler) on :8792
+npm run dev                       # scripts/dev.mjs (public/ + server, code word "dev") on :8792
 npm run check                     # Biome + node:test unit tests = CI job "quality"
 npm run lint:fix                  # apply Biome fixes
 node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrome screenshots
@@ -25,25 +26,48 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
   `public/js/version.js` (the repo holds `dev`; shown at the bottom of the main screen as `v1.2.3`),
   stamps `public/sw.js`, installs
   `ws` into the upload folder (`npm ci --omit=dev`; the server has no npm), rsyncs it to
-  the server (secret `DEPLOY_SSH_KEY`) and verifies the live site, including a WebSocket
-  handshake. The server restarts the service when `.version` changes. No manual deploy.
-- The browser check is not in CI. It signs in with fake credentials (the broker
-  rejects them) and seeds a cached status and the fixture map, so it never drives a
-  real vacuum.
+  the server (secret `DEPLOY_SSH_KEY`) and verifies the live site (locked: 401 without
+  the code word). The server restarts the service when `.version` changes. No manual deploy.
+- The browser check is not in CI. It enters the code word, hands the server fake
+  credentials (the broker rejects them) and seeds a cached status and the fixture map,
+  so it never drives a real vacuum. It needs a freshly started `npm run dev` (the
+  server must hold no sign-in) and `google-chrome` on the PATH.
 
 ## Architecture
 
+- Access (`server/access.js`): `SITE_CODE` (on the server in
+  `/etc/krisperapps/saugi.env`, never in the repo or in output) is the code word.
+  `POST /api/unlock` sets the cookie `roscoe_access` (HMAC of the code word, HttpOnly);
+  without it `/api` and the relays answer 401. Without `SITE_CODE` there is no `/api`
+  and the app cannot work.
+- Sign-in (`server/vacuums.js`): the server keeps it in `DATA_DIR/config.json`
+  (Roborock `rriot` and device key, Xiaomi session) and runs the protocol modules from
+  `public/js/` itself: one MQTT connection to the broker for all browsers (direct TLS,
+  dropped after 5 idle minutes), `api.js` through the REST function in-process, the
+  Xiaomi cloud over `fetch`. Nothing of the sign-in may ever be sent to a browser:
+  `/api/state` gives names and rooms only (`tests/access.test.js` checks that). When a
+  sign-in expires the app asks again and posts the steps (`/api/rr/login`,
+  `/api/mi/login`: e-mail code, captcha, 2FA code); the result is stored on the server.
+  A browser of an older version hands its sign-in over once (`/api/adopt`).
+- `server/api.js`: the `/api` routes. RPCs go through `/api/<rr|mi>/rpc` and the
+  allowlists `RR_METHODS`/`MI_METHODS` in `vacuums.js`; a new RPC in the app needs an
+  entry there.
+- `public/js/remote.js`: the browser's side of `/api` (`RemoteRobot`, same interface
+  as `Robot`/`MiRobot`). `app.js`: UI, polling (status every 2 s and map every 3 s
+  while moving; no push), commands.
 - `public/js/api.js`: e-mail-code login, device list, Hawk-signed REST calls via
-  `/rest/<host>/<path>`. `mqtt.js`: minimal MQTT 3.1.1 client over WebSocket (`/mqtt`).
-  `protocol.js`: protocol `1.0` framing, AES-ECB with timestamp-derived keys, map
-  responses. `crypto.js`: MD5, CRC32, AES-ECB emulated on WebCrypto AES-CBC.
-  `map.js`: map parser and rasteriser. `robot.js`: RPC layer (`get_status`,
-  `get_map_v1`, ...). `app.js`: UI, polling (map every 3 s while moving), commands.
+  `/rest/<host>/<path>`. `mqtt.js`: minimal MQTT 3.1.1 client (over the relay's
+  WebSocket or a socket the caller opens). `protocol.js`: protocol `1.0` framing,
+  AES-ECB with timestamp-derived keys, map responses. `crypto.js`: MD5, CRC32, AES-ECB
+  emulated on WebCrypto AES-CBC. `robot.js`: RPC layer (`get_status`, `get_map_v1`,
+  ...). These run on the server; they stay in `public/js/` and stay runnable in a
+  browser (the relays and `tests/` use them that way). `map.js`: map parser and
+  rasteriser, in the browser.
 - `functions/rest/[[path]].js` (written as a Pages Function, `onRequest({ request,
   params })`, and kept that way) and `server/mqtt.js` (WebSocket via `ws` <-> TLS 8883
-  via `node:tls`) share the host allowlist in `shared/relay.js`. They exist only
-  because the Roborock REST API sends no CORS headers and the broker speaks raw TLS;
-  keep them stateless (the per-client limits in `server/limit.js` are the one
+  via `node:tls`) share the host allowlist in `shared/relay.js`. The app no longer
+  uses the relays from the browser (only the REST function, in-process); they remain,
+  behind the code word. Keep them stateless (the per-client limits in `server/limit.js` are the one
   exception, in memory) and limited to the Roborock hosts the app uses.
 - `server/node.js`: node:http entry, loopback only. Routes `/rest/*`, `/mqtt` (upgrade)
   and `/` (Caddy passes directories on, so the entry answers the start page); checks
@@ -57,8 +81,9 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
   Xiaomi signs in with cookies and redirects, so that relay takes cookies as
   `x-mi-cookie`, never follows redirects and returns the upstream status, `Location`
   and the cookies set in `x-mi-*` headers. The limits in `docs/SERVER.md` apply to it too.
-- State: IoT credentials, status and room names in `localStorage` (`saugi.*`), the
-  last map in the cache `saugi-data` (written by `app.js`, cleared on sign-out).
+- State in the browser: status and room names in `localStorage` (`saugi.*`), the last
+  map in the cache `saugi-data` (written by `app.js`, cleared on sign-out). No
+  credentials. Signing out signs the server out, i.e. everyone.
 - Only protocol `1.0` devices are supported (S series; developed with an S7,
   `roborock.vacuum.a15`); `A01`/`B01`/`L01` devices are skipped at sign-in.
 
@@ -70,7 +95,7 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
   list's files. A cache is renamed exactly when its files change. Never bump anything
   by hand.
 - Install fetches only what a cache of the same name lacks (`cache: 'reload'`). Shell
-  requests are stale-while-revalidate, icon hits are final, `/rest/` and `/mqtt` are
+  requests are stale-while-revalidate, icon hits are final, `/api/`, `/rest/`, `/mi/` and `/mqtt` are
   never cached. A new file goes into `SHELL` or `ASSETS`; `tests/stamp-sw.test.js`
   fails if a listed file does not exist.
 - Activate deletes only outdated `saugi-shell-`/`saugi-assets-` caches. Never widen
@@ -102,8 +127,6 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
 - `tests/node.test.js` runs the bridge against a local TLS echo server with a
   throwaway `*.roborock.com` certificate (needs `openssl`). A real vacuum is not part
   of any automated test.
-- Sign-in data lives in `localStorage`, i.e. per address: after a change of address
-  everyone signs in again.
 - A refused MQTT connection (CONNACK 5) can also mean rate limiting, not only invalid
   credentials; the app then shows "Sign-in expired". A retry backoff was considered and
   deliberately not built; only add one if this causes real problems.
@@ -121,7 +144,9 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
   `roborock.vacuum.a01` (`/v2/plugin/fetch_plugin` gives the zip; plain JS,
   `Parser/MapParser` in `main.bundle`).
   `align.js` fits the last run onto the S7's map (search over heading and shift on a
-  150 mm grid; runs under about 6 m2 or with a poor fit are not shown) and `app.js` draws
+  150 mm grid; runs under about 6 m2 or with a poor fit are not shown, unless the map
+  holds the dock: it stands in the room `MI_DOCK_ROOM` in `app.js` ("Bad"; change it there
+  when the dock moves), the charger must land there and 1.5 m2 will do) and `app.js` draws
   it as an overlay with the end position. The download goes through `/mi/` to
   `<name>.fds.api.xiaomi.com`.
 - Schedules (`schedule.js`) live in two places, as in the Roborock app's S7 plugin: a

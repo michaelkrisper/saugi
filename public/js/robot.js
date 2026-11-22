@@ -17,7 +17,10 @@ import {
 const TIMEOUT_MS = 10000;
 
 export class Robot {
-  constructor(rriot, device) {
+  // `open(host, port)`: how the server reaches the broker (see MqttClient); a browser
+  // goes through the relay.
+  constructor(rriot, device, open) {
+    this.open = open;
     this.rriot = rriot;
     this.device = device;
     this.security = createSecurity(rriot.k);
@@ -30,9 +33,10 @@ export class Robot {
     const { u, s, k, r } = this.rriot;
     const broker = new URL(r.m.replace(/^ssl:/, 'https:'));
     const user = md5hex(`${u}:${k}`).slice(2, 10);
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${proto}//${location.host}/mqtt?host=${broker.hostname}&port=${broker.port || 8883}`;
-    this.mqtt = new MqttClient(url, {
+    const port = Number(broker.port) || 8883;
+    const relay = () =>
+      `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/mqtt?host=${broker.hostname}&port=${port}`;
+    this.mqtt = new MqttClient(this.open ? () => this.open(broker.hostname, port) : relay(), {
       clientId: user + md5hex(crypto.getRandomValues(new Uint8Array(8))).slice(0, 8),
       username: user,
       password: md5hex(`${s}:${k}`).slice(16),

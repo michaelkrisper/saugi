@@ -1,10 +1,9 @@
 import { fitLiteMap, liteToMm } from './align.js';
 import { FIELD_MM, FLOOR, parseLiteMap, SIZE } from './litemap.js';
 import { parseMap, rasterize, toPixel } from './map.js';
-import { Robot } from './robot.js';
+import * as server from './remote.js';
 import { deviceTimer, jobName, miTimer, newJob, parseCron, parseMiTimers, updatedJob } from './schedule.js';
 import { VERSION } from './version.js';
-import { COUNTRIES, MiCloud, MiLogin, MiRobot, relayHttp } from './xiaomi.js';
 
 const STATES = {
   1: 'Starting',
@@ -43,7 +42,9 @@ const ICON = {
 
 const $ = (id) => document.getElementById(id);
 const STORE = 'saugi';
-let cfg = JSON.parse(localStorage.getItem(STORE) || 'null');
+// What the server tells about the vacuums (boot): { device: { name, model }, rooms,
+// mi: { device: { name, model } } }. The sign-in itself stays on the server.
+let cfg = null;
 let robot = null;
 let status = null;
 let map = null;
@@ -60,52 +61,84 @@ let miFastUntil = 0;
 // The second vacuum's last run laid onto the map: { id, robot, fit, canvas }.
 let miMap = null;
 let miMapDue = true;
+// The room (as the first vacuum's map names it) where the second vacuum's dock stands.
+const MI_DOCK_ROOM = 'Bad';
 // Next to a second vacuum the first goes by the app's name instead of its model name.
 const RR_NAME = 'Roscoe';
-let active = (cfg?.mi && localStorage.getItem(`${STORE}.active`)) || 'rr';
-
-const save = () => localStorage.setItem(STORE, JSON.stringify(cfg));
+let active = 'rr';
 
 function banner(text) {
   $('banner').textContent = text ?? '';
   $('banner').hidden = !text;
 }
 
-// --- login ---
+// --- code word and sign-in: both are the server's business (server/access.js, vacuums.js) ---
 
-async function showLogin() {
+function showLock() {
+  $('lock').hidden = false;
+  $('lock').onsubmit = async (e) => {
+    e.preventDefault();
+    $('lock-error').textContent = '';
+    $('lock-btn').disabled = true;
+    try {
+      await server.unlock($('lock-code').value);
+      $('lock').hidden = true;
+      boot();
+    } catch (err) {
+      $('lock-error').textContent = err.message;
+    } finally {
+      $('lock-btn').disabled = false;
+    }
+  };
+}
+
+// Earlier versions kept the sign-in in this browser. It moves to the server once, if
+// the server has none, and is removed here either way.
+async function handOver(state) {
+  const old = JSON.parse(localStorage.getItem(STORE) || 'null');
+  if (!old) return state;
+  if (!state.rr && old.userData) await server.adopt(old).catch(() => {});
+  localStorage.removeItem(STORE);
+  return server.state();
+}
+
+async function boot() {
+  let state;
+  try {
+    state = await handOver(await server.state());
+  } catch (err) {
+    if (err.status === 401) return showLock();
+    $('app').hidden = false;
+    banner(`No connection to the server: ${err.message}`);
+    setTimeout(() => location.reload(), 5000);
+    return;
+  }
+  cfg = state.rr && { device: state.rr, rooms: state.rooms, mi: state.mi && { device: state.mi } };
+  active = (cfg?.mi && localStorage.getItem(`${STORE}.active`)) || 'rr';
+  if (cfg) showApp();
+  else showLogin();
+}
+
+// The Roborock sign-in: the server asks Roborock for the code mail and keeps the result.
+function showLogin() {
   $('app').hidden = true;
   $('login').hidden = false;
-  const { LoginFlow, fetchHome } = await import('./api.js');
-  let flow = null;
+  let sent = false;
   $('login').onsubmit = async (e) => {
     e.preventDefault();
     $('login-error').textContent = '';
     $('login-btn').disabled = true;
     try {
-      if (!flow) {
-        flow = new LoginFlow($('email').value);
-        await flow.requestCode();
+      if (!sent) {
+        const { sent: to } = await server.rrLogin({ email: $('email').value });
+        sent = true;
         $('email').disabled = true;
         $('code').hidden = false;
         $('code').focus();
-        $('login-hint').textContent = `Code sent to ${flow.email}.`;
+        $('login-hint').textContent = `Code sent to ${to}.`;
         $('login-btn').textContent = 'Sign in';
       } else {
-        const userData = await flow.login($('code').value.trim());
-        const home = await fetchHome(flow.baseUrl, userData);
-        const products = Object.fromEntries((home.products ?? []).map((p) => [p.id, p]));
-        const devices = [...(home.devices ?? []), ...(home.receivedDevices ?? [])].filter(
-          (d) => (d.pv ?? '1.0') === '1.0',
-        );
-        if (!devices.length) throw new Error('No supported vacuum found in this account.');
-        const d = devices[0];
-        cfg = {
-          userData: { rriot: userData.rriot },
-          device: { duid: d.duid, name: d.name, localKey: d.localKey, model: products[d.productId]?.model },
-          rooms: Object.fromEntries((home.rooms ?? []).map((r) => [r.id, r.name])),
-        };
-        save();
+        await server.rrLogin({ code: $('code').value.trim() });
         location.reload();
       }
     } catch (err) {
@@ -346,51 +379,34 @@ function schedule(ms) {
 }
 
 async function poll() {
-  if (!robot?.connected || document.hidden) return;
+  if (!robot || document.hidden) return;
   try {
     await refreshStatus();
     const active = CLEANING.has(status.state) || RETURNING.has(status.state);
     if (Date.now() - lastMap > (active ? 3000 : 60000)) await refreshMap();
+    banner('');
     schedule(active ? 2000 : 15000);
   } catch (err) {
-    banner(err.message);
-    schedule(5000);
-  }
-}
-
-async function connect() {
-  robot?.close();
-  robot = new Robot(cfg.userData.rriot, cfg.device);
-  robot.ondps = (dps) => {
-    if (!status) return;
-    if (dps[121] != null) status.state = dps[121];
-    if (dps[122] != null) status.battery = dps[122];
-    if (dps[123] != null) status.fan_power = dps[123];
     render();
-  };
-  try {
-    await robot.connect();
-    // Only reconnect once a session was established; a refused login also
-    // closes the socket and would otherwise loop.
-    robot.onclose = () => {
-      render();
-      if (!document.hidden) setTimeout(connect, 2000);
-    };
-    banner('');
-    lastMap = 0;
-    await poll();
-    loadRoomNames();
-    loadJob().catch(() => {});
-  } catch (err) {
-    robot.close();
-    render();
+    // The server could not sign in to Roborock: asking again will not help.
     if (/refused/.test(err.message)) {
       banner('Sign-in expired. Tap the device name to sign in again.');
       return;
     }
-    banner(`No connection: ${err.message}`);
-    setTimeout(() => !robot?.connected && !document.hidden && connect(), 5000);
+    banner(robot.connected ? err.message : `No connection: ${err.message}`);
+    schedule(5000);
   }
+}
+
+// There is no connection to hold: the server keeps it. The first poll shows whether
+// the vacuum answers.
+async function connect() {
+  robot = new server.RemoteRobot('rr');
+  lastMap = 0;
+  await poll();
+  if (!robot?.connected) return;
+  loadRoomNames();
+  loadJob().catch(() => {});
 }
 
 async function loadRoomNames() {
@@ -463,7 +479,10 @@ async function loadMiMap() {
     const last = await mi.robot.lastMap();
     if (!last || last.id === miMap?.id) return;
     const lite = parseLiteMap(last.bytes);
-    const fit = lite.fields && (await fitLiteMap(lite.fields, map.image));
+    // A short run fits in many places; the room of the dock it started from settles it.
+    const room = Object.keys(roomNames).find((id) => roomNames[id] === MI_DOCK_ROOM);
+    const dock = lite.charger && room ? { ...lite.charger, room: Number(room) } : null;
+    const fit = lite.fields && (await fitLiteMap(lite.fields, map.image, dock));
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = SIZE;
     if (fit) {
@@ -496,7 +515,6 @@ async function pollMi() {
 }
 
 function openMiLogin() {
-  const login = new MiLogin(relayHttp);
   let step = null;
   const show = () => {
     $('mi-user').disabled = $('mi-pass').disabled = !!step;
@@ -505,7 +523,7 @@ function openMiLogin() {
     $('mi-answer').value = '';
     $('mi-next').textContent = step ? 'Continue' : 'Sign in';
     if (step?.captcha) {
-      $('mi-captcha').src = URL.createObjectURL(new Blob([step.captcha]));
+      $('mi-captcha').src = `data:image/jpeg;base64,${step.captcha}`;
       $('mi-answer').placeholder = 'Characters in the picture';
     } else if (step) {
       $('mi-answer').placeholder = `Code from the ${step.code === 'phone' ? 'text message' : 'e-mail'}`;
@@ -522,21 +540,14 @@ function openMiLogin() {
     $('mi-next').disabled = true;
     try {
       const answer = $('mi-answer').value.trim();
-      if (!step) step = await login.start($('mi-user').value.trim(), $('mi-pass').value);
-      else if (step.captcha) step = await login.captcha(answer);
-      else step = await login.verify(answer);
-      if (step.session) {
-        for (const country of COUNTRIES) {
-          const list = await new MiCloud(relayHttp, step.session, country).devices().catch(() => []);
-          const d = list.find((d) => /^(roborock|rockrobo)\.vacuum\./.test(d.model));
-          if (!d) continue;
-          cfg.mi = { session: step.session, country, device: { did: d.did, name: d.name, model: d.model } };
-          save();
-          localStorage.setItem(`${STORE}.active`, 'mi');
-          location.reload();
-          return;
-        }
-        throw new Error('No Roborock vacuum found in this Xiaomi account.');
+      if (!step)
+        step = await server.miLogin({ user: $('mi-user').value.trim(), password: $('mi-pass').value });
+      else if (step.captcha) step = await server.miLogin({ captcha: answer });
+      else step = await server.miLogin({ code: answer });
+      if (step.done) {
+        localStorage.setItem(`${STORE}.active`, 'mi');
+        location.reload();
+        return;
       }
     } catch (err) {
       $('mi-error').textContent = err.message;
@@ -549,11 +560,8 @@ function openMiLogin() {
   };
 }
 
-function removeMi() {
-  miMap = null;
-  miMapDue = true;
-  delete cfg.mi;
-  save();
+async function removeMi() {
+  await server.miRemove().catch(() => {});
   localStorage.removeItem(`${STORE}.mi.status`);
   localStorage.removeItem(`${STORE}.active`);
   location.reload();
@@ -565,11 +573,7 @@ let job = null;
 let miJob = null;
 
 async function loadJob() {
-  const { getJobs } = await import('./api.js');
-  const [jobs, timers] = await Promise.all([
-    getJobs(cfg.userData.rriot, cfg.device.duid),
-    robot.rpc('get_server_timer'),
-  ]);
+  const [jobs, timers] = await Promise.all([server.getJobs(), robot.rpc('get_server_timer')]);
   const known = new Set((Array.isArray(timers[0]) ? timers : [timers]).map(([name]) => name));
   // The cloud reorders jobs on edit; take the oldest so it stays the same one.
   job = jobs.filter((j) => known.has(jobName(j))).sort((a, b) => a.id - b.id)[0] ?? null;
@@ -609,9 +613,6 @@ async function saveSchedule() {
   }
   const plan = { hour, minute, days, enabled: $('sched-on').checked };
   if (active === 'mi') return saveMiSchedule(plan);
-  const { addJob, putJob } = await import('./api.js');
-  const { rriot } = cfg.userData;
-  const { duid } = cfg.device;
   $('sched-save').disabled = true;
   try {
     if (!robot?.connected) throw new Error('the vacuum is offline');
@@ -620,8 +621,8 @@ async function saveSchedule() {
     // Same order as the Roborock app: the vacuum entry first, then the cloud job.
     // The cloud does not sync on/off to the vacuum, so that is set separately.
     await robot.rpc('set_server_timer', [deviceTimer(next, plan)]);
-    if (job) await putJob(rriot, duid, job.id, next);
-    else await addJob(rriot, duid, next);
+    if (job) await server.putJob(job.id, next);
+    else await server.addJob(next);
     await robot.rpc('upd_server_timer', [[jobName(next), plan.enabled ? 'on' : 'off']]);
     await loadJob();
     $('sched').close();
@@ -693,14 +694,17 @@ async function showApp() {
     else if (confirm(`Remove ${cfg.mi.device.name}?`)) removeMi();
   };
   $('signout').onclick = () => {
-    if (!confirm('Sign out?')) return;
+    if (!confirm('Sign out of Roborock? This signs out everyone who uses this app.')) return;
     localStorage.clear();
     caches.delete('saugi-data');
-    location.reload();
+    server
+      .signOut()
+      .catch(() => {})
+      .then(() => location.reload());
   };
   if (cfg.mi) {
     mi = {
-      robot: new MiRobot(cfg.mi),
+      robot: new server.RemoteRobot('mi'),
       status: JSON.parse(localStorage.getItem(`${STORE}.mi.status`) || 'null'),
     };
     $('who').hidden = false;
@@ -723,8 +727,6 @@ async function showApp() {
     if (document.hidden) {
       clearTimeout(pollTimer);
       clearTimeout(miPoll);
-      robot?.close();
-      robot = null;
     } else {
       connect();
       pollMi();
@@ -752,5 +754,4 @@ if ('serviceWorker' in navigator) {
   }
   navigator.serviceWorker.register('/sw.js');
 }
-if (cfg?.device) showApp();
-else showLogin();
+boot();

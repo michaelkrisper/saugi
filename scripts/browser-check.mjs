@@ -1,8 +1,10 @@
 /**
- * Smoke test in headless Chrome at iPhone size: screenshots the login screen,
- * then seeds a fake account, a cached status and the fixture map and
- * screenshots the main screen. The fake credentials are rejected by the
- * broker, so the test never touches a real vacuum.
+ * Smoke test in headless Chrome at iPhone size: enters the code word (CODE, "dev"
+ * as in scripts/dev.mjs), screenshots the login screen, then seeds a fake account
+ * as an older version kept it (the app hands it to the server), a cached status and
+ * the fixture map and screenshots the main screen. The fake credentials are rejected
+ * by the broker, so the test never touches a real vacuum. It needs a server without
+ * a sign-in: a freshly started `npm run dev`.
  *
  *   node scripts/browser-check.mjs [http://localhost:8792] [outdir]
  */
@@ -80,8 +82,17 @@ try {
 
   await cdp('Page.navigate', { url: base });
   await wait(1500);
+  if (!(await evaluate("!document.getElementById('lock').hidden")))
+    throw new Error('code word screen not shown');
+  await shot('saugi-lock');
+  await evaluate(
+    `document.getElementById('lock-code').value = ${JSON.stringify(process.env.CODE ?? 'dev')}; document.getElementById('lock-btn').click(); 0`,
+  );
+  await wait(1500);
   if (!(await evaluate("!document.getElementById('login').hidden")))
-    throw new Error('login screen not shown');
+    throw new Error(
+      'login screen not shown (wrong code word, or the server already has a sign-in: restart it)',
+    );
   await shot('saugi-login');
   const legal = () =>
     evaluate(
@@ -116,6 +127,8 @@ try {
   if (!state.mapShown) throw new Error('cached map was not drawn');
   if (!/Sign-in expired/.test(state.banner))
     throw new Error(`expected broker to reject fake login, got: ${state.banner}`);
+  if (await evaluate("localStorage.getItem('saugi') !== null"))
+    throw new Error('the sign-in was left in the browser');
   // The cloud rejects the fake credentials, so the dialog shows its load error.
   await evaluate("document.getElementById('sched-btn').click()");
   await wait(1500);

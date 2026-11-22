@@ -28,13 +28,13 @@ No build step; the server's only runtime dependency is `ws`. Node 26 (see `.nvmr
 
 ```sh
 npm ci
-npm run dev      # static files + relays on http://localhost:8792
+npm run dev      # static files + server on http://localhost:8792 (code word "dev")
 npm run check    # Biome + tests, as in CI
 node scripts/browser-check.mjs http://localhost:8792   # headless Chrome smoke test
 ```
 
-The browser smoke test signs in with deliberately wrong credentials, so it
-never drives a real vacuum. The service worker's cache names are stamped with
+The browser smoke test hands the server deliberately wrong credentials, so it
+never drives a real vacuum; it needs a freshly started `npm run dev`. The service worker's cache names are stamped with
 a content hash on deploy (`scripts/stamp-sw.mjs`), so there is nothing to
 bump; a new file the app needs offline goes into `SHELL` (or `ASSETS` for
 icons) in `public/sw.js`.
