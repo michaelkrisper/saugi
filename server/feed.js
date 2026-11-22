@@ -13,7 +13,8 @@ export function createFeed({ status, map }) {
   let dueAt = 0;
   let running = false;
   let again = null;
-  // What went out last: { status (JSON), map (bytes), mapText (gzip, base64) }.
+  // What went out last: { status (JSON), compared (JSON without the counter), map (bytes),
+  // mapText (gzip, base64) }.
   let sent = {};
   let mapAt = 0;
   let force = false;
@@ -46,8 +47,11 @@ export function createFeed({ status, map }) {
       const due = !mapAt;
       const [now] = await Promise.all([status(), due && askMap()]);
       const text = JSON.stringify(now);
-      if (force || text !== sent.status) emit('status', text);
+      // The vacuum counts its answers (msg_seq): that alone is no change.
+      const same = JSON.stringify({ ...now, msg_seq: 0 }) === sent.compared;
+      if (force || !same) emit('status', text);
       sent.status = text;
+      sent.compared = JSON.stringify({ ...now, msg_seq: 0 });
       force = false;
       const moving = MOVING.has(now.state);
       if (!due && Date.now() - mapAt > (moving ? 3000 : 60_000)) await askMap();

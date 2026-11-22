@@ -52,12 +52,21 @@ test('a watcher gets status and map, a later one at once', async () => {
 });
 
 test('a command makes the status go out again, changed or not', async () => {
-  const feed = createFeed({ status: async () => ({ state: 8 }), map: async () => new Uint8Array(1) });
+  let seq = 0;
+  const feed = createFeed({
+    status: async () => ({ msg_seq: ++seq, state: 8 }),
+    map: async () => new Uint8Array(1),
+  });
   const w = watcher();
   const leave = feed.watch(w.send);
   while (w.got.length < 2) await w.next();
+  // Asked again, the vacuum only counted on: nothing goes out.
+  feed.kick(0);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(seq, 2);
+  assert.equal(w.got.length, 2);
   feed.kick(0, true);
-  assert.deepEqual(await w.next(), ['status', '{"state":8}']);
+  assert.deepEqual(await w.next(), ['status', '{"msg_seq":3,"state":8}']);
   leave();
 });
 
