@@ -9,8 +9,11 @@ import { createServer, STATUS_CODES } from 'node:http';
 import { Readable } from 'node:stream';
 import { onRequest as mi } from '../functions/mi/[[path]].js';
 import { onRequest as rest } from '../functions/rest/[[path]].js';
+import { createAccess, json } from './access.js';
+import { api, signsIn } from './api.js';
 import { clientKey, createLimiter } from './limit.js';
 import { createMqttRelay, target } from './mqtt.js';
+import { createVacuums } from './vacuums.js';
 
 // The app posts small forms and JSON (login, schedules).
 const MAX_BODY = 256 * 1024;
@@ -25,6 +28,11 @@ const CODE_LIMIT = { capacity: 6, perMs: 600_000 };
 const MI_LIMIT = { capacity: 60, perMs: 60_000 };
 // Password attempts and the calls that make Xiaomi send a code.
 const MI_SIGNIN_LIMIT = { capacity: 10, perMs: 600_000 };
+
+// Guesses of the code word.
+const UNLOCK_LIMIT = { capacity: 5, perMs: 600_000 };
+// The app polls two vacuums and a map, every 2 to 3 s while they move.
+const API_LIMIT = { capacity: 180, perMs: 60_000 };
 
 const INDEX = new URL('../public/index.html', import.meta.url);
 
@@ -106,24 +114,42 @@ async function handleMi(incoming, url, client, limits) {
   return mi({ request, params: { path: url.pathname.slice('/mi/'.length).split('/') } });
 }
 
-async function handle(incoming, limits) {
+// /mqtt without an upgrade: the same answers as the upgrade path gives, never further.
+function plainMqtt(incoming, url, access) {
+  if (!target(url) || !sameOrigin(incoming.headers)) return text('forbidden', 403);
+  if (!access.allowed(incoming.headers)) return text('locked', 401);
+  return text('websocket expected', 426);
+}
+
+async function handleApi(incoming, url, client, limits, { access, vacuums }) {
+  if (!access.enabled) return json({ error: 'No code word is set on the server.' }, 404);
+  const unlocks = url.pathname === '/api/unlock' && incoming.method === 'POST';
+  if (!unlocks && !access.allowed(incoming.headers)) return json({ error: 'locked' }, 401);
+  if (!limits.api(client) || (signsIn(url.pathname) && !limits.code(client))) return busy();
+  const request = await toRequest(incoming);
+  if (!request) return text('too large', 413);
+  if (unlocks) return access.unlock(request, () => limits.unlock(client));
+  return api(vacuums, request, url.pathname);
+}
+
+async function handle(incoming, limits, gate) {
+  const { access } = gate;
   const url = parse(incoming);
   if (!url) return text('bad request', 400);
-  if (url.pathname === '/mqtt') {
-    // Same answers as the upgrade path gives; a plain request never gets further.
-    if (!target(url) || !sameOrigin(incoming.headers)) return text('forbidden', 403);
-    return text('websocket expected', 426);
-  }
+  if (url.pathname === '/mqtt') return plainMqtt(incoming, url, access);
   if (url.pathname === '/' && ['GET', 'HEAD'].includes(incoming.method)) {
     return new Response(readFileSync(INDEX), {
       headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' },
     });
   }
   const toMi = url.pathname.startsWith('/mi/');
-  if (!toMi && !url.pathname.startsWith('/rest/')) return text('not found', 404);
+  const toApi = url.pathname.startsWith('/api/');
+  if (!toMi && !toApi && !url.pathname.startsWith('/rest/')) return text('not found', 404);
   const reads = ['GET', 'HEAD'].includes(incoming.method);
   if (!sameOrigin(incoming.headers, !reads)) return text('forbidden', 403);
   const client = clientKey(incoming);
+  if (toApi) return handleApi(incoming, url, client, limits, gate);
+  if (!access.allowed(incoming.headers)) return text('locked', 401);
   if (toMi) return handleMi(incoming, url, client, limits);
   if (!limits.rest(client) || (sendsCode(url.pathname) && !limits.code(client))) return busy();
   const request = await toRequest(incoming);
@@ -144,10 +170,14 @@ export function createApp(options) {
     code: createLimiter(CODE_LIMIT),
     mi: createLimiter(MI_LIMIT),
     miSignIn: createLimiter(MI_SIGNIN_LIMIT),
+    unlock: createLimiter(UNLOCK_LIMIT),
+    api: createLimiter(API_LIMIT),
   };
+  const access = createAccess(options?.access);
+  const vacuums = createVacuums({ store: access.store, ...options?.vacuums });
   const app = createServer(async (incoming, outgoing) => {
     try {
-      const response = await handle(incoming, limits);
+      const response = await handle(incoming, limits, { access, vacuums });
       if (response.status === 413) outgoing.setHeader('connection', 'close');
       outgoing.writeHead(response.status, Object.fromEntries(response.headers));
       if (response.body)
@@ -170,6 +200,7 @@ export function createApp(options) {
       if (!url) return refuse(socket, 400);
       const to = url.pathname === '/mqtt' && target(url);
       if (!to || !sameOrigin(incoming.headers, true)) return refuse(socket, 403);
+      if (!access.allowed(incoming.headers)) return refuse(socket, 401);
       const client = clientKey(incoming);
       if (mqtt.full(client)) return refuse(socket, 503);
       mqtt.upgrade(incoming, socket, head, to, client);
@@ -182,6 +213,7 @@ export function createApp(options) {
   const close = app.close.bind(app);
   app.close = (done) => {
     mqtt.close();
+    vacuums.close();
     app.closeAllConnections();
     return close(done);
   };

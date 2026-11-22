@@ -32,9 +32,10 @@ with position, path and restricted zones.
 
 ## Sign-in
 
-With your Roborock account and an e-mail code, just like the official app. Only
-the IoT credentials are stored, in the device's `localStorage`; there is no
-server of our own that keeps any credentials.
+The app is private: a code word, set on the server, opens it. Behind it you sign
+in once with your Roborock account and an e-mail code, just like the official
+app. The server keeps the IoT credentials and talks to the vacuum; a browser
+never gets them. When the sign-in expires the app asks again.
 
 Install: on iOS via Safari → Share → "Add to Home Screen", on Android via
 Chrome → "Install app".
@@ -45,22 +46,24 @@ Developed and tested with an S7 (`roborock.vacuum.a15`).
 
 ## How it works
 
-The browser speaks the Roborock protocol itself:
+A small Node service (`server/`) speaks the Roborock protocol and offers the app
+in the browser a plain JSON API (`/api`, `public/js/remote.js`). The protocol
+modules are browser-compatible ES modules and live in `public/js/`:
 
 | Module | Purpose |
 | --- | --- |
 | `public/js/api.js` | E-mail code login, device list (Hawk-signed REST calls) |
-| `public/js/mqtt.js` | Minimal MQTT 3.1.1 client over WebSocket |
+| `public/js/mqtt.js` | Minimal MQTT 3.1.1 client |
 | `public/js/protocol.js` | `1.0` message framing, AES-ECB with timestamp-derived keys, map responses |
 | `public/js/crypto.js` | MD5, CRC32, AES-ECB on top of WebCrypto |
-| `public/js/map.js` | Parse the map format (image, path, robot, zones) and rasterise it |
-| `public/js/app.js` | UI, polling, commands |
+| `public/js/map.js` | Parse the map format (image, path, robot, zones) and rasterise it (browser) |
+| `public/js/app.js` | UI, polling, commands (browser) |
+| `server/vacuums.js`, `server/api.js` | The stored sign-in, the connection to the vacuums, the `/api` routes |
+| `server/access.js` | The code word |
 
-It still can't run entirely without a server: the Roborock API sends no CORS
-headers, and the MQTT broker only listens on raw TLS (port 8883), which a
-browser cannot open. Two stateless relays on a small Node service
-(`server/node.js`) therefore just pass bytes through, only to `*.roborock.com`
-and only for requests from the app's own origin:
+Two relays from the time the browser spoke the protocol itself remain, behind
+the code word, only to `*.roborock.com` and only for requests from the app's
+own origin:
 
 - `functions/rest/[[path]].js`: `/rest/<host>/<path>` → `https://<host>/<path>`
 - `server/mqtt.js`: WebSocket ↔ TLS socket to the broker (port 8883)
@@ -73,7 +76,7 @@ No build step; the server's only runtime dependency is `ws`. Node 26.
 
 ```sh
 npm install
-npm run dev      # static files + relays on http://localhost:8792
+npm run dev      # static files + server on http://localhost:8792 (code word "dev")
 npm run check    # Biome + tests
 node scripts/browser-check.mjs http://localhost:8792   # headless Chrome smoke test
 ```
@@ -87,9 +90,10 @@ The tests run with Node's built-in test runner, no test dependencies:
 | `tests/mqtt.test.js` | MQTT framing against a fake WebSocket: CONNECT, SUBSCRIBE/SUBACK, PUBLISH/PUBACK, packet-id wrap, fragmented frames and multi-byte lengths |
 | `tests/relay.test.js` | The REST relay: host allowlist, forwarded headers, path and query mapping |
 | `tests/node.test.js` | The server entry over real HTTP and WebSocket: the MQTT bridge against a local TLS server, host, port, origin and size limits |
+| `tests/access.test.js` | The code word and the `/api`: locked without the cookie, guess limit, the sign-in stays on the server, RPC allowlist |
 
-The browser smoke test signs in with deliberately wrong
-credentials, so it never drives a real vacuum.
+The browser smoke test hands the server deliberately wrong credentials, so it
+never drives a real vacuum; it needs a freshly started `npm run dev`.
 
 Every push and pull request goes through lint and tests; pushes to `main` are
 then deployed to the own server (Caddy for the static files, a Node service

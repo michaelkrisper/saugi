@@ -34,6 +34,8 @@ const packet = (type, flags, body) =>
 const u16 = (n) => new Uint8Array([n >> 8, n & 0xff]);
 
 export class MqttClient {
+  // `url` is the relay's WebSocket address, or a function that opens something that
+  // behaves like a WebSocket (the server's TLS socket to the broker).
   constructor(url, { clientId, username, password, keepalive = 60 }) {
     this.url = url;
     this.opts = { clientId, username, password, keepalive };
@@ -46,7 +48,7 @@ export class MqttClient {
 
   connect() {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(this.url);
+      const ws = typeof this.url === 'function' ? this.url() : new WebSocket(this.url);
       ws.binaryType = 'arraybuffer';
       this.ws = ws;
       this.pending.set('connack', { resolve, reject });
@@ -84,7 +86,7 @@ export class MqttClient {
   }
 
   get connected() {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.ws?.readyState === 1;
   }
 
   subscribe(topic, qos = 1) {

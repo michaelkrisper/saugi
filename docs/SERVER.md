@@ -1,13 +1,13 @@
 # Server
 
 The app runs on the own server at https://roscoe.krisperapps.de/: Caddy in
-front, a small Node service behind it. No secrets, no database; the service
-stores nothing.
+front, a small Node service behind it. The service holds two secrets: the code
+word that opens the app and the vacuums' sign-in.
 
 | What | Where |
 |---|---|
 | Static files | `/srv/apps/saugi/public`, served by Caddy |
-| Relays | service `saugi` (`node server/node.js`, port 8806, loopback only) |
+| Server | service `saugi` (`node server/node.js`, port 8806, loopback only) |
 | Delivery | GitHub Actions on every merge to `main` (job "krisperapps.de"), secret `DEPLOY_SSH_KEY` |
 
 ```sh
@@ -18,8 +18,15 @@ cat /srv/apps/saugi/.version    # which version is live
 
 The one runtime package, `ws`, is installed by the deploy job
 (`npm ci --omit=dev`) and uploaded as `node_modules/`; nothing is installed on
-the server. The service needs no environment variables besides `PORT`
-(`DB_PATH` and `DATA_DIR` from the unit are unused).
+the server.
+
+| Secret | Where |
+|---|---|
+| Code word | `SITE_CODE=...` in `/etc/krisperapps/saugi.env` (root:saugi, 640); restart the service after a change. Changing it locks every browser out until the new word is entered. Without it the app does not work (`/api` answers 404). |
+| Sign-in to Roborock and Xiaomi | `/var/lib/saugi/config.json` (`DATA_DIR`, mode 600), written by the service when someone signs in through the app. Deleting it (service stopped) signs the app out. |
+
+Neither ever reaches a browser: the app gets a cookie derived from the code word
+and, from `/api/state`, the vacuums' names and rooms.
 
 ## Requests
 
@@ -29,11 +36,24 @@ to the Node service, WebSocket upgrades included:
 | Path | What |
 |---|---|
 | `/` | start page (`public/index.html`; Caddy's `file` matcher does not match a directory) |
+| `/api/unlock` | takes the code word, sets the cookie `roscoe_access` (HttpOnly, one year) |
+| `/api/...` | the app's calls: state, sign-in steps, status, map, RPCs from an allowlist, schedules (`server/api.js`) |
 | `/rest/<host>/<path>` | HTTPS relay to the Roborock REST API |
 | `/mi/<host>/<path>` | HTTPS relay to the Xiaomi cloud (second vacuum from Xiaomi Home) |
 | `/mqtt?host=<host>&port=8883` | WebSocket, bridged to a TLS connection to the Roborock MQTT broker |
 
-Anything else answers 404.
+Anything else answers 404. Everything but `/`, the static files and
+`/api/unlock` answers 401 without the cookie.
+
+The service itself talks to Roborock (REST, and one MQTT connection to the
+broker for all browsers, dropped after 5 minutes without a request) and to the
+Xiaomi cloud, to the same hosts the relays allow. The app in the browser no
+longer uses the relays; they remain, behind the code word.
+
+Per client: 5 guesses of the code word per 10 minutes, 180 `/api` requests per
+minute (the app polls), 6 sign-in steps per 10 minutes (each can make Roborock
+or Xiaomi send a code). `/api` requests other than GET must carry this site's
+`Origin`.
 
 ## What the relays allow
 

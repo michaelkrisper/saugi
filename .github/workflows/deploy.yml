@@ -84,15 +84,18 @@ jobs:
           check /manifest.webmanifest 200
           check /js/app.js 200
           curl -fsS --max-time 20 "$live/js/version.js" | grep -F "'${VERSION#v}'"
-          # The relays are up, and closed to everything but Roborock and this site.
-          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 426
+          # The service is up and locked: without the code word's cookie (SITE_CODE in
+          # /etc/krisperapps/saugi.env) neither the api nor a relay answers.
+          check /api/state 401
+          check /api/rr/status 401
+          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 401
           check '/mqtt?host=example.com&port=8883' 403
-          check /rest/example.com/ 403
+          check /rest/euiot.roborock.com/ 401
           check /rest/euiot.roborock.com/ 403 -H 'Origin: https://example.com'
-          # A real handshake from this site is accepted, one from elsewhere is not.
+          # A handshake from this site is locked too, one from elsewhere is refused outright.
           upgrade=(-H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13'
             -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' --http1.1 --max-time 3)
-          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 101 "${upgrade[@]}" -H "Origin: $live"
+          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 401 "${upgrade[@]}" -H "Origin: $live"
           check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 403 "${upgrade[@]}" -H 'Origin: https://example.com'
 
   # Tags every tested commit on main with the next patch version (vX.Y.Z).

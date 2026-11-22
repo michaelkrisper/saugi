@@ -9,8 +9,12 @@ import { isRoom } from './map.js';
 const PAD = 16;
 const SLACK = 15;
 const CENTER = SIZE / 2;
-// Below this a run fits into any larger room: about 6 m2 of floor.
+// Below this a run fits into any larger room: about 6 m2 of floor. With the dock's
+// room known, 1.5 m2 will do.
 const MIN_FLOOR = 270;
+const MIN_FLOOR_DOCKED = 67;
+// How far from its room the dock may land, in fields: the room's edge is where it stands.
+const DOCK_REACH = 2;
 const MIN_COVER = 0.85;
 const CANDIDATES = 48;
 // Shifts kept per heading in the coarse pass, and how far apart they must lie.
@@ -31,23 +35,39 @@ function cell({ width, height, pixels }, X, Y) {
   return rooms >= 5 ? 2 : walls ? 1 : 0;
 }
 
+// Whether the middle pixel of a cell is floor of this room (segment number).
+function inRoom({ width, height, pixels }, X, Y, room) {
+  const x = Math.min(X * 3 + 1, width - 1);
+  const y = Math.min(Y * 3 + 1, height - 1);
+  const t = pixels[y * width + x];
+  return isRoom(t) && t >> 3 === room;
+}
+
+function spread(mask, w, at) {
+  for (let dy = -DOCK_REACH; dy <= DOCK_REACH; dy++)
+    mask.fill(1, at + dy * w - DOCK_REACH, at + dy * w + DOCK_REACH + 1);
+}
+
 // The lidar map at 150 mm with a margin: what a floor field and what an obstacle scores there.
-function coarse(image) {
+function coarse(image, room) {
   const w = Math.ceil(image.width / 3) + 2 * PAD;
   const h = Math.ceil(image.height / 3) + 2 * PAD;
   const floor = new Int8Array(w * h).fill(-2);
   const wall = new Int8Array(w * h);
+  // Where the dock may be: cells within DOCK_REACH of the room's floor.
+  const dock = room === undefined ? null : new Uint8Array(w * h);
   for (let Y = 0; Y < h - 2 * PAD; Y++) {
     for (let X = 0; X < w - 2 * PAD; X++) {
       const at = (Y + PAD) * w + X + PAD;
       const kind = cell(image, X, Y);
+      if (dock && inRoom(image, X, Y, room)) spread(dock, w, at);
       if (kind === 2) {
         floor[at] = 2;
         wall[at] = -1;
       } else if (kind === 1) wall[at] = 2;
     }
   }
-  return { w, h, floor, wall };
+  return { w, h, floor, wall, dock };
 }
 
 // Every `step`-th point turned by `deg` around the lite map's centre, rounded to fields.
@@ -80,13 +100,14 @@ function keep(found, shift) {
   found.length = Math.min(found.length, KEEP);
 }
 
-// Best shifts for one heading, best first; `near` limits the search to +-3 fields around a shift.
-function best(g, floor, obstacles, near) {
+// Best shifts for one heading, best first; `dock` (the turned dock) must land near its
+// room; `near` limits the search to +-3 fields around a shift.
+function best(g, floor, obstacles, near, dock) {
   let x0 = Infinity;
   let x1 = -Infinity;
   let y0 = Infinity;
   let y1 = -Infinity;
-  for (const pts of [floor, obstacles]) {
+  for (const pts of [floor, obstacles, dock ?? []]) {
     for (let i = 0; i < pts.length; i += 2) {
       x0 = Math.min(x0, pts[i]);
       x1 = Math.max(x1, pts[i]);
@@ -105,6 +126,7 @@ function best(g, floor, obstacles, near) {
   const found = [];
   for (let ty = tyMin; ty <= tyMax; ty++) {
     for (let tx = txMin; tx <= txMax; tx++) {
+      if (dock && !g.dock[(dock[1] + ty) * g.w + dock[0] + tx]) continue;
       const score = sum(g.floor, g.w, floor, tx, ty) + sum(g.wall, g.w, obstacles, tx, ty);
       keep(found, { score, tx, ty });
     }
@@ -123,24 +145,28 @@ function points(fields, kind) {
 
 // { a, x, y }: heading in degrees and where the lite map's centre lies, in the lidar
 // map's millimetres (see liteToMm). null when the run is too small or fits nowhere.
-// `pause` lets the page breathe between headings.
-export async function fitLiteMap(fields, image, pause = () => new Promise((r) => setTimeout(r))) {
+// `dock` narrows the search: { x, y } is the lite map's charger, `room` the lidar map's
+// segment it stands in. `pause` lets the page breathe between headings.
+export async function fitLiteMap(fields, image, dock, pause = () => new Promise((r) => setTimeout(r))) {
   const floor = points(fields, FLOOR);
   const obstacles = points(fields, OBSTACLE);
-  if (floor.length / 2 < MIN_FLOOR) return null;
-  const g = coarse(image);
+  if (floor.length / 2 < (dock ? MIN_FLOOR_DOCKED : MIN_FLOOR)) return null;
+  const g = coarse(image, dock?.room);
+  const at = dock && [dock.x / FIELD_MM - CENTER - 0.5, dock.y / FIELD_MM - CENTER - 0.5];
+  const docked = (a) => at && turn(at, a, 1);
   // A coarse pass over all headings with a third of the points, then the most
   // promising headings again with all of them: the coarse winner alone can be wrong.
   const rough = [];
   for (let a = 0; a < 360; a += 5) {
-    for (const found of best(g, turn(floor, a, 3), turn(obstacles, a, 3))) rough.push({ ...found, a });
+    for (const found of best(g, turn(floor, a, 3), turn(obstacles, a, 3), null, docked(a)))
+      rough.push({ ...found, a });
     await pause();
   }
   rough.sort((p, q) => q.score - p.score);
   let fit = { score: -Infinity };
   for (const start of rough.slice(0, CANDIDATES)) {
     for (let a = start.a - 4; a <= start.a + 4; a++) {
-      const [found] = best(g, turn(floor, a, 1), turn(obstacles, a, 1), start);
+      const [found] = best(g, turn(floor, a, 1), turn(obstacles, a, 1), start, docked(a));
       if (found?.score > fit.score) fit = { ...found, a };
     }
     await pause();

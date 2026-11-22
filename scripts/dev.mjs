@@ -40,6 +40,8 @@ function serveFile(request, response) {
   return true;
 }
 
+// The app needs a code word on the server; locally it is "dev" unless SITE_CODE says otherwise.
+process.env.SITE_CODE ??= 'dev';
 const app = createApp();
 createServer((request, response) => {
   const isRead = request.method === 'GET' || request.method === 'HEAD';

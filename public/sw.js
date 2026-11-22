@@ -9,17 +9,12 @@ const OWN = /^saugi-(shell|assets)-/;
 const SHELL = [
   '/',
   '/js/app.js',
-  '/js/api.js',
-  '/js/crypto.js',
   '/js/map.js',
-  '/js/mqtt.js',
-  '/js/protocol.js',
-  '/js/robot.js',
+  '/js/remote.js',
   '/js/schedule.js',
   '/js/litemap.js',
   '/js/align.js',
   '/js/version.js',
-  '/js/xiaomi.js',
   '/manifest.webmanifest',
 ];
 const ASSETS = ['/icon.svg', '/icon-180.png', '/icon-192.png', '/icon-512.png'];
@@ -59,7 +54,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  if (/^\/(rest|mi)\//.test(url.pathname) || url.pathname === '/mqtt') return;
+  if (/^\/(rest|mi|api)\//.test(url.pathname) || url.pathname === '/mqtt') return;
   const asset = ASSETS.includes(url.pathname);
   e.respondWith(
     caches.open(asset ? ASSETS_CACHE : SHELL_CACHE).then(async (cache) => {
