@@ -50,6 +50,13 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
   the origin and the body size. Static files never reach it: Caddy serves `public/`
   (`scripts/dev.mjs` locally). The relays sit on the server's own address: every limit
   in `docs/SERVER.md` ("What the relays allow") stays, so they cannot serve as a proxy.
+- `xiaomi.js`: optional second vacuum paired with Xiaomi Home (`cfg.mi`): password
+  sign-in with captcha and 2FA code, RC4-signed cloud API, miIO RPC via
+  `/home/rpc/<did>` (`MiRobot`, same interface as `Robot`, polled, no push). Its relay
+  `functions/mi/[[path]].js` reaches only the Xiaomi account and API hosts (`MI_HOST`).
+  Xiaomi signs in with cookies and redirects, so that relay takes cookies as
+  `x-mi-cookie`, never follows redirects and returns the upstream status, `Location`
+  and the cookies set in `x-mi-*` headers. The limits in `docs/SERVER.md` apply to it too.
 - State: IoT credentials, status and room names in `localStorage` (`saugi.*`), the
   last map in the cache `saugi-data` (written by `app.js`, cleared on sign-out).
 - Only protocol `1.0` devices are supported (S series; developed with an S7,
@@ -100,6 +107,12 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
 - A refused MQTT connection (CONNACK 5) can also mean rate limiting, not only invalid
   credentials; the app then shows "Sign-in expired". A retry backoff was considered and
   deliberately not built; only add one if this causes real problems.
+- Xiaomi Home vacuum (developed with a Roborock E5, `roborock.vacuum.a01`): reference is
+  PiotrMachowski/Xiaomi-cloud-tokens-extractor; `tests/fixtures/xiaomi-vectors.json` holds
+  values computed with its signing functions. Same RPCs as the S7 for status and commands.
+  The E5 answers no map RPC over the cloud while idle (`get_map_v1`: "user ack timeout");
+  only `get_clean_record_map [begin]` gives an object name (`saplite/...`, fetched via
+  `/home/getmapfileurl` with the name URL-decoded) in an undocumented `RRSA` format.
 - Schedules (`schedule.js`) live in two places, as in the Roborock app's S7 plugin: a
   cloud job (`/user/devices/<duid>/jobs`) and a vacuum entry (`set_server_timer`, same
   name). The Roborock app lists only jobs the vacuum knows, and the cloud does not sync

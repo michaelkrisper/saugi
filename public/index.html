@@ -19,6 +19,7 @@
 <link rel="modulepreload" href="/js/map.js">
 <link rel="modulepreload" href="/js/schedule.js">
 <link rel="modulepreload" href="/js/version.js">
+<link rel="modulepreload" href="/js/xiaomi.js">
 <style>
   :root { color-scheme: dark; --bg:#111418; --card:#1b2027; --fg:#e8eaed; --dim:#8b939e; --acc:#4f9dff; --ok:#3ccf7a; --warn:#ffb340; --bad:#ff5d5d; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -34,7 +35,7 @@
   }
   header { display: flex; align-items: center; gap: 12px; padding: 14px 18px 6px; }
   #state { font-size: 22px; font-weight: 600; flex: 1; min-width: 0; }
-  #name { display: block; font-size: 13px; font-weight: 400; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #name { display: block; font-size: 13px; font-weight: 400; color: var(--dim); }
   #battery { font-variant-numeric: tabular-nums; padding: 6px 12px; border-radius: 99px; background: var(--card); }
   #stats { display: flex; gap: 18px; padding: 0 18px; color: var(--dim); font-size: 14px; font-variant-numeric: tabular-nums; min-height: 18px; }
   #mapbox { flex: 1; position: relative; margin: 10px 12px; border-radius: 18px; background: var(--card); overflow: hidden; }
@@ -78,7 +79,14 @@
   .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: left .15s; }
   .switch:checked { background: var(--ok); }
   .switch:checked::after { left: 23px; }
-  #logout { background: none; padding: 6px; color: var(--dim); font-size: 13px; font-weight: 400; }
+  #who { display: flex; gap: 4px; margin: 4px 12px 8px; padding: 4px; border-radius: 14px; background: var(--card); }
+  #who button { flex: 1; min-width: 0; padding: 9px 6px; border-radius: 10px; font-size: 14px; color: var(--dim); background: none;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  #who button.on { color: var(--fg); background: #2c333d; }
+  #menu form button { padding: 14px 0; font-size: 16px; background: #2c333d; }
+  #mi p { margin: 0; color: var(--dim); font-size: 14px; }
+  #mi-captcha { align-self: center; border-radius: 8px; background: #fff; }
+  #mi-error { color: var(--bad); font-size: 14px; }
 </style>
 </head>
 <body>
@@ -101,6 +109,11 @@
     </button>
     <div id="battery">-- %</div>
   </header>
+  <div id="who" hidden>
+    <button data-who="rr"></button>
+    <button data-who="mi"></button>
+    <button data-who="all">All</button>
+  </div>
   <div id="stats"></div>
   <div id="banner" hidden></div>
   <div id="mapbox">
@@ -149,6 +162,30 @@
     <menu>
       <button value="cancel" formnovalidate>Cancel</button>
       <button id="sched-save" class="primary" value="save">Save</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="menu">
+  <form method="dialog">
+    <button type="button" id="mi-add"></button>
+    <button type="button" id="signout">Sign out</button>
+    <button value="cancel">Close</button>
+  </form>
+</dialog>
+
+<dialog id="mi">
+  <form>
+    <h2>Xiaomi Home</h2>
+    <p id="mi-hint">Add a vacuum that is paired with Xiaomi Home. Sign in with your Xiaomi account.</p>
+    <input id="mi-user" autocomplete="username" autocapitalize="none" placeholder="E-mail, phone or Xiaomi ID" required>
+    <input id="mi-pass" type="password" autocomplete="current-password" placeholder="Password" required>
+    <img id="mi-captcha" alt="Captcha" hidden>
+    <input id="mi-answer" autocomplete="one-time-code" autocapitalize="none" hidden>
+    <div id="mi-error"></div>
+    <menu>
+      <button type="button" id="mi-cancel">Cancel</button>
+      <button id="mi-next" class="primary">Sign in</button>
     </menu>
   </form>
 </dialog>

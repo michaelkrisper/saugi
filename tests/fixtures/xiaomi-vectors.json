@@ -1,0 +1,27 @@
+{
+  "ssecurity": "AAECAwQFBgcICQoLDA0ODw==",
+  "rand": [
+    9,
+    8,
+    7,
+    6,
+    5,
+    4,
+    3,
+    2
+  ],
+  "millis": 1795000000000,
+  "nonce": "CQgHBgUEAwIByH36",
+  "signedNonce": "ty3KwBdkzNrR65IZCtsKTx4rWbVf+Z1e5RWsUOu7j2s=",
+  "path": "/home/rpc/123456789",
+  "data": "{\"id\":1,\"method\":\"get_status\",\"params\":[]}",
+  "fields": {
+    "data": "rivo/n+Ptk4csJXS/b5I9plqtJhoTAeUSNa1fAG7VKAXcRtreA6folsT",
+    "rc4_hash__": "r13k1Q6H/wNO6IDT/qd+/+ADqrtoUDu2UMOrMg==",
+    "signature": "84meFnN8A79NArZrKNfwXhn544s=",
+    "ssecurity": "AAECAwQFBgcICQoLDA0ODw==",
+    "_nonce": "CQgHBgUEAwIByH36"
+  },
+  "reply": "{\"code\":0,\"message\":\"ok\",\"result\":[{\"state\":8,\"battery\":100}]}",
+  "replyEncrypted": "rivi9TnQpVgO8dLL8KJftcQt8cc+fB/CBYCyalDiGqRUOSF9KV/RmHILo8M97/2GeR+/C9bBzSV563c4MLA="
+}

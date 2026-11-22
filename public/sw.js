@@ -17,6 +17,7 @@ const SHELL = [
   '/js/robot.js',
   '/js/schedule.js',
   '/js/version.js',
+  '/js/xiaomi.js',
   '/manifest.webmanifest',
 ];
 const ASSETS = ['/icon.svg', '/icon-180.png', '/icon-192.png', '/icon-512.png'];
@@ -56,7 +57,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  if (url.pathname.startsWith('/rest/') || url.pathname === '/mqtt') return;
+  if (/^\/(rest|mi)\//.test(url.pathname) || url.pathname === '/mqtt') return;
   const asset = ASSETS.includes(url.pathname);
   e.respondWith(
     caches.open(asset ? ASSETS_CACHE : SHELL_CACHE).then(async (cache) => {

@@ -2,6 +2,7 @@ import { parseMap, rasterize, toPixel } from './map.js';
 import { Robot } from './robot.js';
 import { deviceTimer, jobName, newJob, parseCron, updatedJob } from './schedule.js';
 import { VERSION } from './version.js';
+import { COUNTRIES, MiCloud, MiLogin, MiRobot, relayHttp } from './xiaomi.js';
 
 const STATES = {
   1: 'Starting',
@@ -49,6 +50,13 @@ let roomNames = {};
 let busy = false;
 let pollTimer = null;
 let lastMap = 0;
+// A second vacuum from Xiaomi Home (cfg.mi): { robot, status }. `active` is what the
+// controls act on: 'rr' (the Roborock account's vacuum), 'mi' or 'all'.
+let mi = null;
+let miTimer = null;
+// Next to a second vacuum the first goes by the app's name instead of its model name.
+const RR_NAME = 'Roscoe';
+let active = (cfg?.mi && localStorage.getItem(`${STORE}.active`)) || 'rr';
 
 const save = () => localStorage.setItem(STORE, JSON.stringify(cfg));
 
@@ -110,28 +118,48 @@ function batteryColor(b) {
   return b < 50 ? 'var(--warn)' : 'var(--ok)';
 }
 
+const isMoving = (s) => CLEANING.has(s.state) || RETURNING.has(s.state);
+const isLive = (d) => d.robot?.connected && d.status;
+
+function selected() {
+  const list = [];
+  if (active !== 'mi') list.push({ name: cfg.mi ? RR_NAME : cfg.device.name, robot, status });
+  if (active !== 'rr' && mi) list.push({ name: cfg.mi.device.name, robot: mi.robot, status: mi.status });
+  return list;
+}
+
 function render() {
-  const s = status;
-  const online = robot?.connected && s;
-  $('state').firstChild.textContent = !s ? 'Connecting …' : (STATES[s.state] ?? `Status ${s.state}`);
-  $('name').textContent = cfg.device.name;
-  $('battery').textContent = `${s?.battery ?? '--'} %`;
-  $('battery').style.color = batteryColor(s?.battery);
+  const sel = selected();
+  const live = sel.filter(isLive);
+  const one = sel.length === 1 ? sel[0] : null;
+  const label = (s) => (!s ? 'Connecting …' : (STATES[s.state] ?? `Status ${s.state}`));
+  $('state').firstChild.textContent = one ? label(one.status) : 'All vacuums';
+  $('name').textContent = one ? one.name : sel.map((d) => `${d.name}: ${label(d.status)}`).join(' · ');
+  const batteries = sel.map((d) => d.status?.battery);
+  $('battery').textContent = `${batteries.map((b) => b ?? '--').join(' / ')} %`;
+  $('battery').style.color = batteryColor(batteries.some((b) => b == null) ? null : Math.min(...batteries));
   const stats = [];
-  if (s?.clean_area) stats.push(`${(s.clean_area / 1e6).toFixed(1)} m²`);
-  if (s?.clean_time) stats.push(`${Math.round(s.clean_time / 60)} min`);
+  if (one?.status?.clean_area) stats.push(`${(one.status.clean_area / 1e6).toFixed(1)} m²`);
+  if (one?.status?.clean_time) stats.push(`${Math.round(one.status.clean_time / 60)} min`);
   $('stats').textContent = stats.join('   ');
 
-  const moving = s && (CLEANING.has(s.state) || RETURNING.has(s.state));
+  const moving = live.some((d) => isMoving(d.status));
   const main = $('main');
   main.innerHTML = moving ? `${ICON.pause}Pause` : `${ICON.play}Start`;
   main.dataset.action = moving ? 'pause' : 'start';
-  main.disabled = !online || busy;
-  $('home').disabled = !online || busy || RETURNING.has(s.state) || DOCKED.has(s.state);
+  main.disabled = !live.length || busy;
+  $('home').disabled =
+    !live.length || busy || live.every((d) => RETURNING.has(d.status.state) || DOCKED.has(d.status.state));
   for (const b of $('fan').children) {
-    b.classList.toggle('on', Number(b.dataset.fan) === s?.fan_power);
-    b.disabled = !online || busy;
+    b.classList.toggle(
+      'on',
+      live.length > 0 && live.every((d) => d.status.fan_power === Number(b.dataset.fan)),
+    );
+    b.disabled = !live.length || busy;
   }
+  // The schedule belongs to the Roborock account's vacuum.
+  $('sched-btn').hidden = active === 'mi';
+  for (const b of $('who').children) b.classList.toggle('on', b.dataset.who === active);
 }
 
 // No-go zones red, no-mop zones purple, virtual walls as red lines.
@@ -345,44 +373,126 @@ async function loadRoomNames() {
   }
 }
 
-async function send(action) {
+async function command(run) {
   busy = true;
   render();
   navigator.vibrate?.(15);
-  try {
-    let method = { start: 'app_start', pause: 'app_pause', home: 'app_charge' }[action];
-    if (action === 'start' && status?.state === 10) {
-      if (status.in_cleaning === 2) method = 'resume_zoned_clean';
-      if (status.in_cleaning === 3) method = 'resume_segment_clean';
-    }
-    await robot.rpc(method);
-    banner('');
-  } catch (err) {
-    banner(`Command failed: ${err.message}`);
-  } finally {
-    busy = false;
-    render();
-    lastMap = 0;
-    schedule(800);
-  }
+  const results = await Promise.allSettled(selected().filter(isLive).map(run));
+  const failed = results.find((r) => r.status === 'rejected');
+  banner(failed ? `Command failed: ${failed.reason.message}` : '');
+  busy = false;
+  render();
 }
 
-async function setFan(power) {
-  busy = true;
-  const prev = status.fan_power;
-  status.fan_power = power;
-  render();
-  navigator.vibrate?.(15);
-  try {
-    await robot.rpc('set_custom_mode', [power]);
-    banner('');
-  } catch (err) {
-    status.fan_power = prev;
-    banner(`Command failed: ${err.message}`);
-  } finally {
-    busy = false;
+// In "all" mode every vacuum gets the same command, whatever it is doing.
+async function send(action) {
+  await command(async ({ robot: r, status: s }) => {
+    let method = { start: 'app_start', pause: 'app_pause', home: 'app_charge' }[action];
+    if (action === 'start' && s.state === 10) {
+      if (s.in_cleaning === 2) method = 'resume_zoned_clean';
+      if (s.in_cleaning === 3) method = 'resume_segment_clean';
+    }
+    await r.rpc(method);
+  });
+  lastMap = 0;
+  schedule(800);
+  scheduleMi(800);
+}
+
+function setFan(power) {
+  return command(async ({ robot: r, status: s }) => {
+    const prev = s.fan_power;
+    s.fan_power = power;
     render();
+    try {
+      await r.rpc('set_custom_mode', [power]);
+    } catch (err) {
+      s.fan_power = prev;
+      throw err;
+    }
+  });
+}
+
+// --- second vacuum (Xiaomi Home): polled over the Xiaomi cloud, no push, no map ---
+
+function scheduleMi(ms) {
+  clearTimeout(miTimer);
+  if (mi) miTimer = setTimeout(pollMi, ms);
+}
+
+async function pollMi() {
+  if (!mi || document.hidden) return;
+  try {
+    mi.status = await mi.robot.status();
+    localStorage.setItem(`${STORE}.mi.status`, JSON.stringify(mi.status));
+    scheduleMi(isMoving(mi.status) ? 3000 : 15000);
+  } catch (err) {
+    if (active !== 'rr') banner(`${cfg.mi.device.name}: ${err.message}`);
+    scheduleMi(15000);
   }
+  render();
+}
+
+function openMiLogin() {
+  const login = new MiLogin(relayHttp);
+  let step = null;
+  const show = () => {
+    $('mi-user').disabled = $('mi-pass').disabled = !!step;
+    $('mi-captcha').hidden = !step?.captcha;
+    $('mi-answer').hidden = !step;
+    $('mi-answer').value = '';
+    $('mi-next').textContent = step ? 'Continue' : 'Sign in';
+    if (step?.captcha) {
+      $('mi-captcha').src = URL.createObjectURL(new Blob([step.captcha]));
+      $('mi-answer').placeholder = 'Characters in the picture';
+    } else if (step) {
+      $('mi-answer').placeholder = `Code from the ${step.code === 'phone' ? 'text message' : 'e-mail'}`;
+    }
+    if (step) $('mi-answer').focus();
+  };
+  $('mi-error').textContent = '';
+  show();
+  $('mi').showModal();
+  $('mi-cancel').onclick = () => $('mi').close();
+  $('mi').querySelector('form').onsubmit = async (e) => {
+    e.preventDefault();
+    $('mi-error').textContent = '';
+    $('mi-next').disabled = true;
+    try {
+      const answer = $('mi-answer').value.trim();
+      if (!step) step = await login.start($('mi-user').value.trim(), $('mi-pass').value);
+      else if (step.captcha) step = await login.captcha(answer);
+      else step = await login.verify(answer);
+      if (step.session) {
+        for (const country of COUNTRIES) {
+          const list = await new MiCloud(relayHttp, step.session, country).devices().catch(() => []);
+          const d = list.find((d) => /^(roborock|rockrobo)\.vacuum\./.test(d.model));
+          if (!d) continue;
+          cfg.mi = { session: step.session, country, device: { did: d.did, name: d.name, model: d.model } };
+          save();
+          localStorage.setItem(`${STORE}.active`, 'mi');
+          location.reload();
+          return;
+        }
+        throw new Error('No Roborock vacuum found in this Xiaomi account.');
+      }
+    } catch (err) {
+      $('mi-error').textContent = err.message;
+      // A wrong code can be retyped; everything else starts over.
+      if (!step?.code) step = null;
+    } finally {
+      $('mi-next').disabled = false;
+    }
+    show();
+  };
+}
+
+function removeMi() {
+  delete cfg.mi;
+  save();
+  localStorage.removeItem(`${STORE}.mi.status`);
+  localStorage.removeItem(`${STORE}.active`);
+  location.reload();
 }
 
 // --- schedule: the oldest job the vacuum knows, created on first save if there is none ---
@@ -478,19 +588,50 @@ async function showApp() {
     saveSchedule();
   };
   $('name').onclick = () => {
-    if (confirm('Sign out?')) {
-      localStorage.clear();
-      caches.delete('saugi-data');
-      location.reload();
-    }
+    $('mi-add').textContent = cfg.mi ? `Remove ${cfg.mi.device.name}` : 'Add a Xiaomi Home vacuum';
+    $('menu').showModal();
   };
+  $('mi-add').onclick = () => {
+    $('menu').close();
+    if (!cfg.mi) openMiLogin();
+    else if (confirm(`Remove ${cfg.mi.device.name}?`)) removeMi();
+  };
+  $('signout').onclick = () => {
+    if (!confirm('Sign out?')) return;
+    localStorage.clear();
+    caches.delete('saugi-data');
+    location.reload();
+  };
+  if (cfg.mi) {
+    mi = {
+      robot: new MiRobot(cfg.mi),
+      status: JSON.parse(localStorage.getItem(`${STORE}.mi.status`) || 'null'),
+    };
+    $('who').hidden = false;
+    $('who').children[0].textContent = RR_NAME;
+    $('who').children[1].textContent = cfg.mi.device.name;
+    $('who').onclick = (e) => {
+      const b = e.target.closest('[data-who]');
+      if (!b) return;
+      active = b.dataset.who;
+      localStorage.setItem(`${STORE}.active`, active);
+      banner('');
+      render();
+    };
+    render();
+    pollMi();
+  }
   new ResizeObserver(draw).observe($('map'));
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       clearTimeout(pollTimer);
+      clearTimeout(miTimer);
       robot?.close();
       robot = null;
-    } else connect();
+    } else {
+      connect();
+      pollMi();
+    }
   });
   connect();
 }
