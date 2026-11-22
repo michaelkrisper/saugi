@@ -19,7 +19,7 @@ const MAX_BODY = 256 * 1024;
 const CODE_LIMIT = { capacity: 6, perMs: 600_000 };
 // Guesses of the code word.
 const UNLOCK_LIMIT = { capacity: 5, perMs: 600_000 };
-// The app polls two vacuums and a map, every 2 to 3 s while they move.
+// Commands, the Xiaomi Home vacuum's status every 3 s while it moves, a retried event stream.
 const API_LIMIT = { capacity: 180, perMs: 60_000 };
 
 const INDEX = new URL('../public/index.html', import.meta.url);
@@ -123,11 +123,12 @@ export function createApp(options) {
       const response = await handle(incoming, limits, { access, vacuums });
       if (response.status === 413) outgoing.setHeader('connection', 'close');
       outgoing.writeHead(response.status, Object.fromEntries(response.headers));
-      if (response.body)
-        Readable.fromWeb(response.body)
-          .on('error', () => outgoing.destroy())
-          .pipe(outgoing);
-      else outgoing.end();
+      if (response.body) {
+        const body = Readable.fromWeb(response.body).on('error', () => outgoing.destroy());
+        // An event stream ends when its browser leaves: that cancels it.
+        outgoing.on('close', () => body.destroy());
+        body.pipe(outgoing);
+      } else outgoing.end();
     } catch (error) {
       console.error('api:', error.cause?.code ?? error.name);
       if (!outgoing.headersSent) outgoing.writeHead(502, { 'cache-control': 'no-store' });

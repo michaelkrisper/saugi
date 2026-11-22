@@ -57,7 +57,8 @@ modules are browser-compatible ES modules and live in `public/js/`:
 | `public/js/protocol.js` | `1.0` message framing, AES-ECB with timestamp-derived keys, map responses |
 | `public/js/crypto.js` | MD5, CRC32, AES-ECB on top of WebCrypto |
 | `public/js/map.js` | Parse the map format (image, path, robot, zones) and rasterise it (browser) |
-| `public/js/app.js` | UI, polling, commands (browser) |
+| `public/js/app.js` | UI, commands (browser) |
+| `server/feed.js` | Status and map pushed to the browsers (server-sent events) |
 | `server/vacuums.js`, `server/api.js` | The stored sign-in, the connection to the vacuums, the `/api` routes |
 | `server/access.js` | The code word |
 

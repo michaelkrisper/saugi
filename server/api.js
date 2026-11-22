@@ -9,6 +9,31 @@ const bytes = (data, headers = {}) =>
   new Response(data, {
     headers: { 'content-type': 'application/octet-stream', 'cache-control': 'no-store', ...headers },
   });
+// Server-sent events: the Roborock vacuum's status and map as they change. The stream
+// ends when the browser leaves (server/node.js cancels it).
+function events(vacuums) {
+  const encoder = new TextEncoder();
+  let stop;
+  const stream = new ReadableStream({
+    // A refusal thrown here leaves the constructor and becomes an ordinary answer.
+    start(controller) {
+      const leave = vacuums.rrWatch((event, data) =>
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`)),
+      );
+      // A silent connection is one that proxies close.
+      const beat = setInterval(() => controller.enqueue(encoder.encode(':\n\n')), 25_000);
+      beat.unref?.();
+      stop = () => {
+        clearInterval(beat);
+        leave();
+      };
+    },
+    cancel: () => stop(),
+  });
+  return new Response(stream, {
+    headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-store' },
+  });
+}
 
 // "METHOD /path" -> (vacuums, request, match) => Response
 const ROUTES = [
@@ -17,7 +42,7 @@ const ROUTES = [
   ['POST /api/rr/login', async (v, r) => json(await v.rrLogin(await body(r)))],
   ['DELETE /api/rr', (v) => done(v.signOut())],
   ['GET /api/rr/status', async (v) => done(await v.rrStatus())],
-  ['GET /api/rr/map', async (v) => bytes(await v.rrMap())],
+  ['GET /api/events', (v) => events(v)],
   [
     'POST /api/rr/rpc',
     async (v, r) => {

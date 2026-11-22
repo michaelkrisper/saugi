@@ -32,6 +32,33 @@ export const getJobs = () => result('/rr/jobs');
 export const addJob = (job) => result('/rr/jobs', { method: 'POST', body: job });
 export const putJob = (id, job) => result(`/rr/jobs/${id}`, { method: 'PUT', body: job });
 
+const gunzip = async (bytes) =>
+  new Uint8Array(
+    await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(),
+  );
+
+/**
+ * The Roborock vacuum as the server pushes it (server-sent events, server/feed.js):
+ * `status(object)`, `map(bytes)`, `fail({ message, lost, closed })`. `lost`: the vacuum
+ * or the server is out of reach; `closed`: the stream is over and has to be opened
+ * again (the browser retries a dropped one itself). Returns what ends it.
+ */
+export function watch({ status, map, fail }) {
+  const source = new EventSource('/api/events');
+  source.addEventListener('status', (e) => status(JSON.parse(e.data)));
+  source.addEventListener('map', async (e) =>
+    map(await gunzip(Uint8Array.from(atob(e.data), (c) => c.charCodeAt(0)))),
+  );
+  source.addEventListener('fail', (e) => fail(JSON.parse(e.data)));
+  source.onerror = () =>
+    fail({
+      message: 'the server does not answer',
+      lost: true,
+      closed: source.readyState === EventSource.CLOSED,
+    });
+  return () => source.close();
+}
+
 /** One vacuum ('rr' or 'mi'). It counts as connected while its calls succeed. */
 export class RemoteRobot {
   constructor(kind) {
@@ -58,11 +85,6 @@ export class RemoteRobot {
 
   status() {
     return this.#run(() => result(`/${this.kind}/status`));
-  }
-
-  /** Roborock: the current map. */
-  map() {
-    return this.#run(async () => new Uint8Array(await (await call('/rr/map')).arrayBuffer()));
   }
 
   /** Xiaomi Home: the map of the last finished run, { id, bytes }, or null. */

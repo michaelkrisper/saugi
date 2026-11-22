@@ -47,8 +47,9 @@ certificate; redirects are not followed. There is no relay: a browser cannot
 make the server reach a host of its choice.
 
 Per client: 5 guesses of the code word per 10 minutes, 180 `/api` requests per
-minute (the app polls), 6 sign-in steps per 10 minutes (each can make Roborock
-or Xiaomi send a code). `/api` requests other than GET must carry this site's
+minute (commands and the second vacuum's status; the first vacuum's status and
+map come over one event stream, `/api/events`, at most 20 at a time), 6 sign-in
+steps per 10 minutes (each can make Roborock or Xiaomi send a code). `/api` requests other than GET must carry this site's
 `Origin`.
 
 ## Headers for static files

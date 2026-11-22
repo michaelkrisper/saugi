@@ -8,6 +8,7 @@ import { addJob, fetchHome, getJobs, LoginFlow, putJob, useTransport } from '../
 import { Robot } from '../public/js/robot.js';
 import { COUNTRIES, MiCloud, MiLogin, MiRobot } from '../public/js/xiaomi.js';
 import { MI_HOST, MQTT_HOST } from '../shared/relay.js';
+import { createFeed } from './feed.js';
 
 // What the app calls; nothing else is passed on to a vacuum.
 const RR_METHODS = new Set([
@@ -39,6 +40,8 @@ const MI_METHODS = new Set([
 
 // The broker connection is dropped when nobody has asked for this long.
 const IDLE_MS = 5 * 60_000;
+// Browsers that may watch the vacuum at once (/api/events).
+const MAX_WATCHERS = 20;
 // A started sign-in waits this long for its code.
 const FLOW_MS = 15 * 60_000;
 
@@ -127,6 +130,7 @@ export function createVacuums({ store, open = brokerSocket, http = miHttp }) {
     robot?.close();
     robot = null;
     connecting = null;
+    feed.reset();
   };
 
   /** The connected Roborock vacuum. One connection serves every browser. */
@@ -140,6 +144,8 @@ export function createVacuums({ store, open = brokerSocket, http = miHttp }) {
       const next = new Robot(config.userData.rriot, config.device, open);
       try {
         await next.connect();
+        // The vacuum tells when something changed; the feed then asks for all of it.
+        next.ondps = () => feed.kick(1000);
         robot = next;
         return next;
       } catch (err) {
@@ -151,6 +157,11 @@ export function createVacuums({ store, open = brokerSocket, http = miHttp }) {
     })();
     return connecting;
   }
+
+  const feed = createFeed({
+    status: async () => (await rr()).status(),
+    map: async () => (await rr()).map(),
+  });
 
   function mi() {
     if (!config?.mi) throw new Refused('No Xiaomi Home vacuum.', 409);
@@ -176,13 +187,19 @@ export function createVacuums({ store, open = brokerSocket, http = miHttp }) {
 
     async rrRpc(method, params) {
       allowed(RR_METHODS, method);
-      return (await rr()).rpc(method, params);
+      const result = await (await rr()).rpc(method, params);
+      // The vacuum reports the old state for a moment after a command.
+      if (!method.startsWith('get_')) feed.kick(800, true);
+      return result;
     },
     async rrStatus() {
       return (await rr()).status();
     },
-    async rrMap() {
-      return (await rr()).map();
+    /** Status and map as they change, see server/feed.js. Returns what ends it. */
+    rrWatch(send) {
+      if (!config?.device) throw new Refused('Not signed in.', 409);
+      if (feed.size >= MAX_WATCHERS) throw new Refused('Too many are watching.', 503);
+      return feed.watch(send);
     },
     rrJobs() {
       if (!config?.device) throw new Refused('Not signed in.', 409);
