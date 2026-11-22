@@ -1,6 +1,5 @@
-// Minimal MQTT 3.1.1 client over a WebSocket byte stream (QoS 0/1, one
-// subscription is all we need). The WebSocket is bridged to TLS port 8883 by
-// server/mqtt.js because the Roborock broker has no WebSocket listener.
+// Minimal MQTT 3.1.1 client over a byte stream shaped like a WebSocket (QoS 0/1, one
+// subscription is all we need). The server opens it as a TLS socket to the broker.
 
 import { concat, utf8 } from './crypto.js';
 
@@ -34,10 +33,9 @@ const packet = (type, flags, body) =>
 const u16 = (n) => new Uint8Array([n >> 8, n & 0xff]);
 
 export class MqttClient {
-  // `url` is the relay's WebSocket address, or a function that opens something that
-  // behaves like a WebSocket (the server's TLS socket to the broker).
-  constructor(url, { clientId, username, password, keepalive = 60 }) {
-    this.url = url;
+  // `open()` gives the connection: onopen/onmessage/onclose, send, close, readyState.
+  constructor(open, { clientId, username, password, keepalive = 60 }) {
+    this.open = open;
     this.opts = { clientId, username, password, keepalive };
     this.buf = new Uint8Array(0);
     this.packetId = 1;
@@ -48,7 +46,7 @@ export class MqttClient {
 
   connect() {
     return new Promise((resolve, reject) => {
-      const ws = typeof this.url === 'function' ? this.url() : new WebSocket(this.url);
+      const ws = this.open();
       ws.binaryType = 'arraybuffer';
       this.ws = ws;
       this.pending.set('connack', { resolve, reject });

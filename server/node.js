@@ -1,34 +1,22 @@
-// Entry point on the own server: plain Node for the two relays. Only requests
+// Entry point on the own server: plain Node for the app's /api. Only requests
 // for files that do not exist in public/ arrive here; the web server in front
 // (Caddy; scripts/dev.mjs locally) serves public/ itself. The one exception is
 // "/": Caddy passes directories on, so the start page is answered here.
 //
 //   PORT=8806 node server/node.js
 import { readFileSync } from 'node:fs';
-import { createServer, STATUS_CODES } from 'node:http';
+import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
-import { onRequest as mi } from '../functions/mi/[[path]].js';
-import { onRequest as rest } from '../functions/rest/[[path]].js';
 import { createAccess, json } from './access.js';
 import { api, signsIn } from './api.js';
 import { clientKey, createLimiter } from './limit.js';
-import { createMqttRelay, target } from './mqtt.js';
 import { createVacuums } from './vacuums.js';
 
 // The app posts small forms and JSON (login, schedules).
 const MAX_BODY = 256 * 1024;
 
-// Per client. Signing in takes about ten requests, the app itself a few per screen.
-const REST_LIMIT = { capacity: 30, perMs: 60_000 };
-// The two calls that make Roborock send a code mail: three sign-in attempts.
+// Per client. The steps that make Roborock or Xiaomi send a code or check a password.
 const CODE_LIMIT = { capacity: 6, perMs: 600_000 };
-
-// The Xiaomi Home vacuum has no push channel: its status is polled, every 3 s
-// while it moves.
-const MI_LIMIT = { capacity: 60, perMs: 60_000 };
-// Password attempts and the calls that make Xiaomi send a code.
-const MI_SIGNIN_LIMIT = { capacity: 10, perMs: 600_000 };
-
 // Guesses of the code word.
 const UNLOCK_LIMIT = { capacity: 5, perMs: 600_000 };
 // The app polls two vacuums and a map, every 2 to 3 s while they move.
@@ -39,11 +27,11 @@ const INDEX = new URL('../public/index.html', import.meta.url);
 const text = (body, status) => new Response(body, { status, headers: { 'cache-control': 'no-store' } });
 
 /**
- * The relays are for this app only: a request that names another site as its
- * origin is refused. Browsers send Origin with every WebSocket handshake and
- * with every request that is not a GET or HEAD, same-origin ones included;
- * `required` is for those. A same-origin GET carries no Origin, and
- * Sec-Fetch-Site is missing in older Safari, so there is nothing to demand there.
+ * The api is for this app only: a request that names another site as its origin
+ * is refused. Browsers send Origin with every request that is not a GET or HEAD,
+ * same-origin ones included; `required` is for those. A same-origin GET carries
+ * no Origin, and Sec-Fetch-Site is missing in older Safari, so there is nothing
+ * to demand there.
  */
 export function sameOrigin(headers, required = false) {
   if (headers['sec-fetch-site'] && !['same-origin', 'none'].includes(headers['sec-fetch-site'])) return false;
@@ -67,7 +55,7 @@ async function readAll(incoming) {
   return Buffer.concat(chunks);
 }
 
-/** Turns Node's request into the Request the function expects. Null: body too large. */
+/** Turns Node's request into a Request. Null: body too large. */
 export async function toRequest(incoming) {
   const headers = new Headers();
   for (const [name, value] of Object.entries(incoming.headers)) {
@@ -90,36 +78,11 @@ function parse(incoming) {
   }
 }
 
-/** Whether the path is one of Roborock's code mail calls, however it is spelled. */
-function sendsCode(pathname) {
-  let path = pathname;
-  try {
-    path = decodeURIComponent(pathname);
-  } catch {}
-  return /emailcodesend|sendemailcode/.test(path.toLowerCase().replace(/[^a-z0-9]/g, ''));
-}
-
-// Shaped like Roborock's answers, so the app shows the message.
 const busy = () =>
-  new Response('{"code":429,"success":false,"msg":"Too many requests. Please try again later."}', {
+  new Response('{"error":"Too many requests. Please try again later."}', {
     status: 429,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
-
-async function handleMi(incoming, url, client, limits) {
-  const signsIn = /serviceloginauth2$|ticket$/i.test(url.pathname);
-  if (!limits.mi(client) || (signsIn && !limits.miSignIn(client))) return busy();
-  const request = await toRequest(incoming);
-  if (!request) return text('too large', 413);
-  return mi({ request, params: { path: url.pathname.slice('/mi/'.length).split('/') } });
-}
-
-// /mqtt without an upgrade: the same answers as the upgrade path gives, never further.
-function plainMqtt(incoming, url, access) {
-  if (!target(url) || !sameOrigin(incoming.headers)) return text('forbidden', 403);
-  if (!access.allowed(incoming.headers)) return text('locked', 401);
-  return text('websocket expected', 426);
-}
 
 async function handleApi(incoming, url, client, limits, { access, vacuums }) {
   if (!access.enabled) return json({ error: 'No code word is set on the server.' }, 404);
@@ -133,43 +96,23 @@ async function handleApi(incoming, url, client, limits, { access, vacuums }) {
 }
 
 async function handle(incoming, limits, gate) {
-  const { access } = gate;
   const url = parse(incoming);
   if (!url) return text('bad request', 400);
-  if (url.pathname === '/mqtt') return plainMqtt(incoming, url, access);
-  if (url.pathname === '/' && ['GET', 'HEAD'].includes(incoming.method)) {
+  const reads = ['GET', 'HEAD'].includes(incoming.method);
+  if (url.pathname === '/' && reads) {
     return new Response(readFileSync(INDEX), {
       headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' },
     });
   }
-  const toMi = url.pathname.startsWith('/mi/');
-  const toApi = url.pathname.startsWith('/api/');
-  if (!toMi && !toApi && !url.pathname.startsWith('/rest/')) return text('not found', 404);
-  const reads = ['GET', 'HEAD'].includes(incoming.method);
+  if (!url.pathname.startsWith('/api/')) return text('not found', 404);
   if (!sameOrigin(incoming.headers, !reads)) return text('forbidden', 403);
-  const client = clientKey(incoming);
-  if (toApi) return handleApi(incoming, url, client, limits, gate);
-  if (!access.allowed(incoming.headers)) return text('locked', 401);
-  if (toMi) return handleMi(incoming, url, client, limits);
-  if (!limits.rest(client) || (sendsCode(url.pathname) && !limits.code(client))) return busy();
-  const request = await toRequest(incoming);
-  if (!request) return text('too large', 413);
-  // /rest/<host>/<path>: the segments of the function's [[path]] parameter.
-  return rest({ request, params: { path: url.pathname.slice('/rest/'.length).split('/') } });
+  return handleApi(incoming, url, clientKey(incoming), limits, gate);
 }
 
-function refuse(socket, status) {
-  socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
-}
-
-/** `options` go to the MQTT relay (tests replace the upstream connection). */
+/** `options`: { access, vacuums } for tests (see server/access.js, server/vacuums.js). */
 export function createApp(options) {
-  const mqtt = createMqttRelay(options);
   const limits = {
-    rest: createLimiter(REST_LIMIT),
     code: createLimiter(CODE_LIMIT),
-    mi: createLimiter(MI_LIMIT),
-    miSignIn: createLimiter(MI_SIGNIN_LIMIT),
     unlock: createLimiter(UNLOCK_LIMIT),
     api: createLimiter(API_LIMIT),
   };
@@ -186,33 +129,14 @@ export function createApp(options) {
           .pipe(outgoing);
       else outgoing.end();
     } catch (error) {
-      console.error('rest relay:', error.cause?.code ?? error.name);
+      console.error('api:', error.cause?.code ?? error.name);
       if (!outgoing.headersSent) outgoing.writeHead(502, { 'cache-control': 'no-store' });
-      outgoing.end('upstream error');
+      outgoing.end('error');
     }
   });
-  app.on('upgrade', (incoming, socket, head) => {
-    // Nothing else listens on this socket: an error (a client that is gone
-    // while it is being refused) or a throw in here would end the process.
-    socket.on('error', () => {});
-    try {
-      const url = parse(incoming);
-      if (!url) return refuse(socket, 400);
-      const to = url.pathname === '/mqtt' && target(url);
-      if (!to || !sameOrigin(incoming.headers, true)) return refuse(socket, 403);
-      if (!access.allowed(incoming.headers)) return refuse(socket, 401);
-      const client = clientKey(incoming);
-      if (mqtt.full(client)) return refuse(socket, 503);
-      mqtt.upgrade(incoming, socket, head, to, client);
-    } catch (error) {
-      console.error('mqtt relay:', error.name);
-      socket.destroy();
-    }
-  });
-  // Bridged sockets would keep the server open for as long as the app is in use.
+  // The vacuums' connection would keep the process alive.
   const close = app.close.bind(app);
   app.close = (done) => {
-    mqtt.close();
     vacuums.close();
     app.closeAllConnections();
     return close(done);

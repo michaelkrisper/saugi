@@ -1,5 +1,5 @@
-// Roborock cloud REST API (login + home data). Requests go through the
-// same-origin relay functions/rest because the API sends no CORS headers.
+// Roborock cloud REST API (login + home data). Requests are addressed to
+// functions/rest (/rest/<host>/<path>); the server passes them in with useTransport.
 
 import { base64, hmacSha256Base64, md5, md5hex } from './crypto.js';
 
@@ -10,8 +10,7 @@ const BASE_URLS = [
   'https://ruiot.roborock.com',
 ];
 
-// The server runs this module too and reaches the relay function without the network.
-let send = (path, init) => fetch(path, init);
+let send = () => Promise.reject(new Error('no transport'));
 export function useTransport(fn) {
   send = fn;
 }

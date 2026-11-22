@@ -46,8 +46,6 @@ const app = createApp();
 createServer((request, response) => {
   const isRead = request.method === 'GET' || request.method === 'HEAD';
   if (!(isRead && serveFile(request, response))) app.emit('request', request, response);
-})
-  .on('upgrade', (request, socket, head) => app.emit('upgrade', request, socket, head))
-  .listen(PORT, '127.0.0.1', () => {
-    console.info(`\n  http://localhost:${PORT}\n`);
-  });
+}).listen(PORT, '127.0.0.1', () => {
+  console.info(`\n  http://localhost:${PORT}\n`);
+});

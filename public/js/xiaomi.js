@@ -216,34 +216,6 @@ export class MiLogin {
   }
 }
 
-// The transport for the browser: through the relay functions/mi.
-export async function relayHttp(url, { method = 'GET', query, form, cookies, headers = {}, agent } = {}) {
-  const u = new URL(url);
-  for (const [k, v] of Object.entries(query ?? {})) u.searchParams.set(k, v);
-  const h = { ...headers };
-  if (cookies) {
-    h['x-mi-cookie'] = Object.entries(cookies)
-      .map(([k, v]) => `${k}=${v}`)
-      .join('; ');
-  }
-  if (agent) h['x-mi-agent'] = agent;
-  if (method === 'POST') h['Content-Type'] = 'application/x-www-form-urlencoded';
-  // The query travels in a header, as with the Roborock relay: it holds secrets.
-  h['x-relay-query'] = u.searchParams.toString();
-  const res = await fetch(`/mi/${u.host}${u.pathname}`, {
-    method,
-    headers: h,
-    body: form && new URLSearchParams(form).toString(),
-  });
-  if (!res.headers.has('x-mi-status')) throw new Error(`Xiaomi relay error (HTTP ${res.status})`);
-  return {
-    status: Number(res.headers.get('x-mi-status')),
-    bytes: new Uint8Array(await res.arrayBuffer()),
-    headers: JSON.parse(res.headers.get('x-mi-headers')),
-    cookies: JSON.parse(res.headers.get('x-mi-set-cookie')),
-  };
-}
-
 // Signed API of one region; `session` is what MiLogin resolved to.
 export class MiCloud {
   constructor(http, session, country) {
@@ -289,7 +261,7 @@ export class MiCloud {
 // The same interface as Robot, for a vacuum reached through the Xiaomi cloud. There is
 // no connection to hold: it counts as connected while its calls succeed.
 export class MiRobot {
-  constructor(mi, http = relayHttp) {
+  constructor(mi, http) {
     this.cloud = new MiCloud(http, mi.session, mi.country);
     this.did = mi.device.did;
     this.connected = false;

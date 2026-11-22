@@ -1,5 +1,6 @@
-// Same-origin relay for the Roborock REST API, which sends no CORS headers.
-// /rest/<host>/<path>?<query> -> https://<host>/<path>?<query>
+// The server's way to the Roborock REST API, written as a Pages Function
+// (public/js/api.js addresses it as it once did from the browser; server/vacuums.js
+// calls it in-process). /rest/<host>/<path>?<query> -> https://<host>/<path>?<query>
 
 import { REST_HOST } from '../../shared/relay.js';
 

@@ -61,18 +61,7 @@ modules are browser-compatible ES modules and live in `public/js/`:
 | `server/vacuums.js`, `server/api.js` | The stored sign-in, the connection to the vacuums, the `/api` routes |
 | `server/access.js` | The code word |
 
-Two relays from the time the browser spoke the protocol itself remain, behind
-the code word, only to `*.roborock.com` and only for requests from the app's
-own origin:
-
-- `functions/rest/[[path]].js`: `/rest/<host>/<path>` → `https://<host>/<path>`
-- `server/mqtt.js`: WebSocket ↔ TLS socket to the broker (port 8883)
-
-Device commands stay AES-encrypted with the device key along the way.
-
-## Development
-
-No build step; the server's only runtime dependency is `ws`. Node 26.
+No build step and no runtime dependencies. Node 26.
 
 ```sh
 npm install
@@ -87,9 +76,9 @@ The tests run with Node's built-in test runner, no test dependencies:
 | --- | --- |
 | `tests/protocol.test.js` | MD5, CRC32, AES, the message format, the Hawk signature and the map parser, byte for byte against reference values from python-roborock |
 | `tests/codec.test.js` | Codec edge cases: PKCS#7 padding at block boundaries, checksum and version rejection, frames without CRC, RPC envelope, HMAC (RFC 4231) |
-| `tests/mqtt.test.js` | MQTT framing against a fake WebSocket: CONNECT, SUBSCRIBE/SUBACK, PUBLISH/PUBACK, packet-id wrap, fragmented frames and multi-byte lengths |
-| `tests/relay.test.js` | The REST relay: host allowlist, forwarded headers, path and query mapping |
-| `tests/node.test.js` | The server entry over real HTTP and WebSocket: the MQTT bridge against a local TLS server, host, port, origin and size limits |
+| `tests/mqtt.test.js` | MQTT framing against a fake socket: CONNECT, SUBSCRIBE/SUBACK, PUBLISH/PUBACK, packet-id wrap, fragmented frames and multi-byte lengths |
+| `tests/relay.test.js` | The REST function and the host allowlists: allowed hosts, forwarded headers, path and query mapping |
+| `tests/node.test.js` | The server entry over real HTTP: start page, nothing besides the api, origin, body size and per-client limits |
 | `tests/access.test.js` | The code word and the `/api`: locked without the cookie, guess limit, the sign-in stays on the server, RPC allowlist |
 
 The browser smoke test hands the server deliberately wrong credentials, so it
@@ -97,7 +86,7 @@ never drives a real vacuum; it needs a freshly started `npm run dev`.
 
 Every push and pull request goes through lint and tests; pushes to `main` are
 then deployed to the own server (Caddy for the static files, a Node service
-for the relays; see [docs/SERVER.md](docs/SERVER.md)). Every
+for the api; see [docs/SERVER.md](docs/SERVER.md)). Every
 merge to `main` is tagged with the next patch version and only tagged commits
 are deployed; bundled releases with release notes come from the Release
 workflow (see [CONTRIBUTING](CONTRIBUTING.md#versions-and-releases)).
