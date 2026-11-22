@@ -173,6 +173,28 @@ test('oversized frames and too many bridges are refused', async () => {
   first.close();
 });
 
+test('the Xiaomi relay over HTTP: mapping, origin, hosts', async () => {
+  let seen;
+  globalThis.fetch = async (url, init) => {
+    seen = { url, init };
+    return new Response('ok', { status: 302, headers: { Location: 'https://sts.api.io.mi.com/sts' } });
+  };
+  const res = await realFetch(`${base}/mi/de.api.io.mi.com/app/home/rpc/1`, {
+    method: 'POST',
+    headers: { origin: base, 'x-relay-query': 'data=abc', 'x-mi-cookie': 'userId=1' },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('x-mi-status'), '302');
+  assert.equal(seen.url, 'https://de.api.io.mi.com/app/home/rpc/1?data=abc');
+  assert.equal(seen.init.headers.get('cookie'), 'userId=1');
+
+  globalThis.fetch = () => assert.fail('must not fetch');
+  assert.equal((await realFetch(`${base}/mi/evil.com/x`)).status, 403);
+  assert.equal((await realFetch(`${base}/mi/de.api.io.mi.com/x`, { method: 'POST' })).status, 403);
+  const foreign = { origin: 'https://evil.example' };
+  assert.equal((await realFetch(`${base}/mi/de.api.io.mi.com/x`, { headers: foreign })).status, 403);
+});
+
 test('the REST relay over HTTP: mapping, body, limits', async () => {
   let seen;
   globalThis.fetch = async (url, init) => {

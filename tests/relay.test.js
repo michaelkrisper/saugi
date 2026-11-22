@@ -149,7 +149,13 @@ test('whatever the upstream host sends is labelled JSON and cannot run as a page
 });
 
 test('the Xiaomi relay reaches only Xiaomi cloud hosts', async () => {
-  for (const host of ['account.xiaomi.com', 'api.io.mi.com', 'de.api.io.mi.com', 'sts.api.io.mi.com'])
+  for (const host of [
+    'account.xiaomi.com',
+    'api.io.mi.com',
+    'de.api.io.mi.com',
+    'sts.api.io.mi.com',
+    'awsde0.fds.api.xiaomi.com',
+  ])
     assert.ok(MI_HOST.test(host), host);
   for (const host of [
     'xiaomi.com',
@@ -158,7 +164,8 @@ test('the Xiaomi relay reaches only Xiaomi cloud hosts', async () => {
     'a.b.api.io.mi.com',
     'evilapi.io.mi.com',
     'xx.api.io.mi.com',
-    'awsde0.fds.api.xiaomi.com',
+    'a.b.fds.api.xiaomi.com',
+    'fds.api.xiaomi.com',
     'mi.com',
   ])
     assert.ok(!MI_HOST.test(host), host);

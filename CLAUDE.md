@@ -110,9 +110,20 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
 - Xiaomi Home vacuum (developed with a Roborock E5, `roborock.vacuum.a01`): reference is
   PiotrMachowski/Xiaomi-cloud-tokens-extractor; `tests/fixtures/xiaomi-vectors.json` holds
   values computed with its signing functions. Same RPCs as the S7 for status and commands.
-  The E5 answers no map RPC over the cloud while idle (`get_map_v1`: "user ack timeout");
-  only `get_clean_record_map [begin]` gives an object name (`saplite/...`, fetched via
-  `/home/getmapfileurl` with the name URL-decoded) in an undocumented `RRSA` format.
+  Its schedule is a timer on the vacuum (`get_timer`/`set_timer`/`upd_timer`/`del_timer`,
+  cron in the vacuum's time zone); the app edits the oldest one.
+  The E5 answers no map RPC over the cloud, idle or cleaning (`get_map_v1`: "user ack timeout");
+  only `get_clean_record_map [begin]` gives an object name (`saplite/<did>/<uid>/<0-9>`, ten
+  slots written after each run, fetched via
+  `/home/getmapfileurl` with the name URL-decoded) in the `RRSA` format, parsed by
+  `litemap.js` (202 x 202 fields of 15 cm, origin and heading are where that run started,
+  so every run has its own frame). Reference for the format: the Xiaomi Home plugin of
+  `roborock.vacuum.a01` (`/v2/plugin/fetch_plugin` gives the zip; plain JS,
+  `Parser/MapParser` in `main.bundle`).
+  `align.js` fits the last run onto the S7's map (search over heading and shift on a
+  150 mm grid; runs under about 6 m2 or with a poor fit are not shown) and `app.js` draws
+  it as an overlay with the end position. The download goes through `/mi/` to
+  `<name>.fds.api.xiaomi.com`.
 - Schedules (`schedule.js`) live in two places, as in the Roborock app's S7 plugin: a
   cloud job (`/user/devices/<duid>/jobs`) and a vacuum entry (`set_server_timer`, same
   name). The Roborock app lists only jobs the vacuum knows, and the cloud does not sync

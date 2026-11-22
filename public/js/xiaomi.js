@@ -312,6 +312,18 @@ export class MiRobot {
     return s;
   }
 
+  // The map the vacuum stored after its last run: { id, bytes } (litemap.js) or null.
+  // There is no map of a run in progress.
+  async lastMap() {
+    const id = (await this.rpc('get_clean_summary'))[3]?.at(-1);
+    if (!id) return null;
+    const [name] = await this.rpc('get_clean_record_map', [id]);
+    const { url } = await this.cloud.call('/home/getmapfileurl', { obj_name: decodeURIComponent(name) });
+    const res = await this.cloud.http(url);
+    if (res.status !== 200) throw new Error(`Map download failed (HTTP ${res.status})`);
+    return { id, bytes: res.bytes };
+  }
+
   close() {
     this.connected = false;
   }
