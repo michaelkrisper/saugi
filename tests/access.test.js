@@ -55,7 +55,7 @@ test('the code word opens the api', async () => {
   closers.push(() => rmSync(dir, { recursive: true, force: true }));
   const call = await start({ code: 'open sesame', dir });
   assert.equal((await call('/')).status, 200);
-  for (const path of ['/api/state', '/api/rr/status', '/api/rr/map', '/api/mi/status'])
+  for (const path of ['/api/state', '/api/rr/status', '/api/events', '/api/mi/status'])
     assert.equal((await call(path)).status, 401, path);
   assert.equal((await call('/api/state', { cookie: 'roscoe_access=nope' })).status, 401);
   assert.equal((await call('/api/adopt', { method: 'POST', body: SIGN_IN })).status, 401);
@@ -69,6 +69,7 @@ test('the code word opens the api', async () => {
 
   assert.deepEqual(await (await call('/api/state', { cookie })).json(), { rr: null, rooms: {}, mi: null });
   assert.equal((await call('/api/rr/status', { cookie })).status, 409);
+  assert.equal((await call('/api/events', { cookie })).status, 409);
   assert.equal((await call('/api/mi/status', { cookie })).status, 409);
   assert.equal((await call('/api/adopt', { method: 'POST', cookie, body: { device: {} } })).status, 400);
 

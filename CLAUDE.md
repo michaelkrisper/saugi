@@ -52,8 +52,14 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
   allowlists `RR_METHODS`/`MI_METHODS` in `vacuums.js`; a new RPC in the app needs an
   entry there.
 - `public/js/remote.js`: the browser's side of `/api` (`RemoteRobot`, same interface
-  as `Robot`/`MiRobot`). `app.js`: UI, polling (status every 2 s and map every 3 s
-  while moving; no push), commands.
+  as `Robot`/`MiRobot`). `app.js`: UI, commands, the map's gestures.
+- `server/feed.js`: the Roborock vacuum's status and map, pushed to every browser that
+  watches (`GET /api/events`, server-sent events; `watch` in `remote.js`). One loop asks
+  the vacuum for all of them (status every 2 s and map every 3 s while it moves, 15 s
+  and 60 s at rest, at once when the vacuum reports a change or after a command) and
+  sends only what changed, the map gzipped and base64. It stops when nobody watches;
+  the app closes its stream while hidden. The Xiaomi Home vacuum is still polled by
+  the browser.
 - `public/js/api.js`: e-mail-code login, device list, Hawk-signed REST calls via
   `/rest/<host>/<path>`. `mqtt.js`: minimal MQTT 3.1.1 client over a socket the caller
   opens. `protocol.js`: protocol `1.0` framing,
@@ -76,9 +82,11 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
   `/home/rpc/<did>` (`MiRobot`, same interface as `Robot`, polled, no push). The server
   reaches only the Xiaomi account, API and map store hosts (`MI_HOST`) and never follows
   redirects (`miHttp` in `vacuums.js`).
-- State in the browser: status and room names in `localStorage` (`saugi.*`), the last
-  map in the cache `saugi-data` (written by `app.js`, cleared on sign-out). No
-  credentials. Signing out signs the server out, i.e. everyone.
+- State in the browser: status, room names and the last `/api/state` (`saugi.cfg`:
+  the app opens with it at once and reloads when the server's answer differs) in
+  `localStorage` (`saugi.*`), the last map in the cache `saugi-data` (written by
+  `app.js`, cleared on sign-out). No credentials. Signing out signs the server out,
+  i.e. everyone.
 - Only protocol `1.0` devices are supported (S series; developed with an S7,
   `roborock.vacuum.a15`); `A01`/`B01`/`L01` devices are skipped at sign-in.
 
@@ -145,7 +153,8 @@ node scripts/browser-check.mjs http://localhost:8792 [outdir]   # headless Chrom
   name). The Roborock app lists only jobs the vacuum knows, and the cloud does not sync
   on/off to the vacuum (`upd_server_timer`). Day numbers: 0 = Sunday.
 - iOS: 26 px extra top padding under the safe area (the status bar blur covers content
-  otherwise); zoom and scrolling are disabled on purpose.
+  otherwise); page zoom and scrolling are disabled on purpose. Only the map zooms
+  (pinch, wheel, double tap; `watchGestures` in `app.js`, pointer events).
 
 ## Workflow
 

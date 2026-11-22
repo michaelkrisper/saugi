@@ -129,6 +129,17 @@ try {
     throw new Error(`expected broker to reject fake login, got: ${state.banner}`);
   if (await evaluate("localStorage.getItem('saugi') !== null"))
     throw new Error('the sign-in was left in the browser');
+  if (!(await evaluate("localStorage.getItem('saugi.cfg')")))
+    throw new Error('the names for the next start were not kept');
+  // A wheel turn over the map zooms in.
+  const picture = () => evaluate("document.getElementById('map').toDataURL()");
+  const fitted = await picture();
+  await evaluate(
+    "document.getElementById('map').dispatchEvent(new WheelEvent('wheel', { deltaY: -500, clientX: 150, clientY: 300, cancelable: true }))",
+  );
+  await wait(300);
+  await shot('saugi-zoom');
+  if ((await picture()) === fitted) throw new Error('the wheel did not zoom the map');
   // The cloud rejects the fake credentials, so the dialog shows its load error.
   await evaluate("document.getElementById('sched-btn').click()");
   await wait(1500);

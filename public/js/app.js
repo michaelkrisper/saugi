@@ -51,8 +51,9 @@ let map = null;
 let bitmap = null;
 let roomNames = {};
 let busy = false;
-let pollTimer = null;
-let lastMap = 0;
+// What ends the server's events for the first vacuum, and the timer that reopens them.
+let stopWatch = null;
+let retry = null;
 // A second vacuum from Xiaomi Home (cfg.mi): { robot, status }. `active` is what the
 // controls act on: 'rr' (the Roborock account's vacuum), 'mi' or 'all'.
 let mi = null;
@@ -102,21 +103,42 @@ async function handOver(state) {
   return server.state();
 }
 
+function start(known) {
+  cfg = known;
+  active = (cfg?.mi && localStorage.getItem(`${STORE}.active`)) || 'rr';
+  if (cfg) showApp();
+  else showLogin();
+}
+
+// What the server said last time (names and rooms) opens the app at once; its answer
+// follows and only counts when it differs.
 async function boot() {
+  const known = localStorage.getItem(`${STORE}.cfg`);
+  if (known) start(JSON.parse(known));
   let state;
   try {
     state = await handOver(await server.state());
   } catch (err) {
-    if (err.status === 401) return showLock();
+    if (err.status === 401) {
+      if (!known) return showLock();
+      localStorage.removeItem(`${STORE}.cfg`);
+      return location.reload();
+    }
+    // An app that is open reports the missing connection itself and keeps asking.
+    if (known) return;
     $('app').hidden = false;
     banner(`No connection to the server: ${err.message}`);
     setTimeout(() => location.reload(), 5000);
     return;
   }
-  cfg = state.rr && { device: state.rr, rooms: state.rooms, mi: state.mi && { device: state.mi } };
-  active = (cfg?.mi && localStorage.getItem(`${STORE}.active`)) || 'rr';
-  if (cfg) showApp();
-  else showLogin();
+  const fresh = JSON.stringify(
+    state.rr ? { device: state.rr, rooms: state.rooms, mi: state.mi && { device: state.mi } } : null,
+  );
+  if (fresh === known) return;
+  if (state.rr) localStorage.setItem(`${STORE}.cfg`, fresh);
+  else localStorage.removeItem(`${STORE}.cfg`);
+  if (known) location.reload();
+  else start(JSON.parse(fresh));
 }
 
 // The Roborock sign-in: the server asks Roborock for the code mail and keeps the result.
@@ -236,8 +258,11 @@ function draw() {
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth;
   const H = canvas.clientHeight;
-  canvas.width = W * dpr;
-  canvas.height = H * dpr;
+  // Setting the size allocates the canvas anew: too much for every frame of a gesture.
+  if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+  }
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
@@ -245,9 +270,14 @@ function draw() {
   $('empty').hidden = true;
 
   const pad = 16;
-  const s = Math.min((W - 2 * pad) / bitmap.width, (H - 2 * pad) / bitmap.height);
-  const offX = (W - bitmap.width * s) / 2;
-  const offY = (H - bitmap.height * s) / 2;
+  const s = Math.min((W - 2 * pad) / bitmap.width, (H - 2 * pad) / bitmap.height) * view.k;
+  // Zoomed in, the map moves until its edge is back at the margin, no further.
+  const maxX = Math.max(0, (bitmap.width * s - W) / 2 + pad);
+  const maxY = Math.max(0, (bitmap.height * s - H) / 2 + pad);
+  view.x = Math.min(maxX, Math.max(-maxX, view.x));
+  view.y = Math.min(maxY, Math.max(-maxY, view.y));
+  const offX = (W - bitmap.width * s) / 2 + view.x;
+  const offY = (H - bitmap.height * s) / 2 + view.y;
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(bitmap.canvas, offX, offY, bitmap.width * s, bitmap.height * s);
   const P = (x, y) => {
@@ -337,6 +367,88 @@ function drawMi(ctx, P) {
   ctx.stroke();
 }
 
+// --- map view: pinch, wheel and double tap zoom, a finger moves the zoomed map ---
+
+const MAX_ZOOM = 8;
+// Zoom factor and shift in CSS px, on top of the map fitted into its box.
+const view = { k: 1, x: 0, y: 0 };
+let frame = 0;
+
+function redraw() {
+  if (frame) return;
+  frame = requestAnimationFrame(() => {
+    frame = 0;
+    draw();
+  });
+}
+
+/** Zooms by `factor`; the map point under (x, y), CSS px in the canvas, stays where it is. */
+function zoomBy(factor, x, y) {
+  const k = Math.min(MAX_ZOOM, Math.max(1, view.k * factor));
+  const rx = x - $('map').clientWidth / 2;
+  const ry = y - $('map').clientHeight / 2;
+  view.x = rx - ((rx - view.x) * k) / view.k;
+  view.y = ry - ((ry - view.y) * k) / view.k;
+  view.k = k;
+  redraw();
+}
+
+function watchGestures(canvas) {
+  const touches = new Map();
+  let down = null;
+  let tap = null;
+  const at = (e) => {
+    const box = canvas.getBoundingClientRect();
+    return { x: e.clientX - box.left, y: e.clientY - box.top, t: e.timeStamp };
+  };
+  const apart = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    down = at(e);
+    touches.set(e.pointerId, down);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const prev = touches.get(e.pointerId);
+    if (!prev) return;
+    const now = at(e);
+    touches.set(e.pointerId, now);
+    if (touches.size === 1) {
+      view.x += now.x - prev.x;
+      view.y += now.y - prev.y;
+      redraw();
+    } else if (touches.size === 2) {
+      const other = [...touches.values()].find((p) => p !== now);
+      // The middle between the fingers moves half as far as this one did.
+      view.x += (now.x - prev.x) / 2;
+      view.y += (now.y - prev.y) / 2;
+      zoomBy(apart(now, other) / (apart(prev, other) || 1), (now.x + other.x) / 2, (now.y + other.y) / 2);
+    }
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    const up = at(e);
+    const short = touches.size === 1 && down && up.t - down.t < 300 && apart(up, down) < 10;
+    if (short && tap && up.t - tap.t < 350 && apart(up, tap) < 30) {
+      zoomBy(view.k > 1 ? 1 / MAX_ZOOM : 2.5, up.x, up.y);
+      tap = null;
+    } else {
+      tap = short ? up : null;
+    }
+  });
+  for (const type of ['pointerup', 'pointercancel'])
+    canvas.addEventListener(type, (e) => touches.delete(e.pointerId));
+  canvas.addEventListener(
+    'wheel',
+    (e) => {
+      e.preventDefault();
+      const { x, y } = at(e);
+      // A pinch on a trackpad arrives as a wheel with ctrlKey and small steps.
+      const step = (e.deltaMode ? e.deltaY * 30 : e.deltaY) * (e.ctrlKey ? 0.01 : 0.002);
+      zoomBy(Math.exp(-step), x, y);
+    },
+    { passive: false },
+  );
+}
+
 function setMap(raw, persist) {
   const parsed = parseMap(raw);
   if (!parsed.image) return;
@@ -361,52 +473,40 @@ function equalBytes(a, b) {
   return true;
 }
 
-async function refreshStatus() {
-  status = await robot.status();
-  localStorage.setItem(`${STORE}.status`, JSON.stringify(status));
-  if (status.error_code) banner(`Error code ${status.error_code}`);
-  render();
+function disconnect() {
+  stopWatch?.();
+  stopWatch = null;
+  clearTimeout(retry);
 }
 
-async function refreshMap() {
-  lastMap = Date.now();
-  setMap(await robot.map(), true);
-}
-
-function schedule(ms) {
-  clearTimeout(pollTimer);
-  pollTimer = setTimeout(poll, ms);
-}
-
-async function poll() {
-  if (!robot || document.hidden) return;
-  try {
-    await refreshStatus();
-    const active = CLEANING.has(status.state) || RETURNING.has(status.state);
-    if (Date.now() - lastMap > (active ? 3000 : 60000)) await refreshMap();
-    banner('');
-    schedule(active ? 2000 : 15000);
-  } catch (err) {
-    render();
-    // The server could not sign in to Roborock: asking again will not help.
-    if (/refused/.test(err.message)) {
-      banner('Sign-in expired. Tap the device name to sign in again.');
-      return;
-    }
-    banner(robot.connected ? err.message : `No connection: ${err.message}`);
-    schedule(5000);
-  }
-}
-
-// There is no connection to hold: the server keeps it. The first poll shows whether
-// the vacuum answers.
-async function connect() {
-  robot = new server.RemoteRobot('rr');
-  lastMap = 0;
-  await poll();
-  if (!robot?.connected) return;
-  loadRoomNames();
-  loadJob().catch(() => {});
+// The server asks the vacuum and pushes what changed (server/feed.js); the first
+// status shows that the vacuum answers.
+function connect() {
+  disconnect();
+  robot ??= new server.RemoteRobot('rr');
+  let first = true;
+  stopWatch = server.watch({
+    status(next) {
+      robot.connected = true;
+      status = next;
+      localStorage.setItem(`${STORE}.status`, JSON.stringify(status));
+      banner(status.error_code ? `Error code ${status.error_code}` : '');
+      render();
+      if (!first) return;
+      first = false;
+      loadRoomNames();
+      loadJob().catch(() => {});
+    },
+    map: (raw) => setMap(raw, true),
+    fail({ message, lost, closed }) {
+      if (lost) robot.connected = false;
+      render();
+      // The server could not sign in to Roborock: it asks again when the app is opened.
+      if (/refused/.test(message)) banner('Sign-in expired. Tap the device name to sign in again.');
+      else banner(lost ? `No connection: ${message}` : message);
+      if (closed) retry = setTimeout(connect, 5000);
+    },
+  });
 }
 
 async function loadRoomNames() {
@@ -439,12 +539,17 @@ async function send(action) {
       if (s.in_cleaning === 2) method = 'resume_zoned_clean';
       if (s.in_cleaning === 3) method = 'resume_segment_clean';
     }
-    await r.rpc(method);
-    // Show the new state at once; the next status confirms it.
+    // Show the new state at once; a failure takes it back, the next status confirms it.
+    const prev = s.state;
     s.state = { start: 5, pause: 10, home: 6 }[action];
+    render();
+    try {
+      await r.rpc(method);
+    } catch (err) {
+      s.state = prev;
+      throw err;
+    }
   });
-  lastMap = 0;
-  schedule(800);
   // The cloud reports the old state for a moment, so ask a little later, then often.
   miFastUntil = Date.now() + 30000;
   scheduleMi(2500);
@@ -502,8 +607,11 @@ async function loadMiMap() {
 async function pollMi() {
   if (!mi || document.hidden) return;
   try {
-    mi.status = await mi.robot.status();
-    localStorage.setItem(`${STORE}.mi.status`, JSON.stringify(mi.status));
+    const next = await mi.robot.status();
+    if (!busy) {
+      mi.status = next;
+      localStorage.setItem(`${STORE}.mi.status`, JSON.stringify(mi.status));
+    }
     scheduleMi(isMoving(mi.status) || Date.now() < miFastUntil ? 3000 : 15000);
     if (isMoving(mi.status)) miMapDue = true;
     else if (miMapDue && map?.image) loadMiMap();
@@ -545,6 +653,7 @@ function openMiLogin() {
       else if (step.captcha) step = await server.miLogin({ captcha: answer });
       else step = await server.miLogin({ code: answer });
       if (step.done) {
+        localStorage.removeItem(`${STORE}.cfg`);
         localStorage.setItem(`${STORE}.active`, 'mi');
         location.reload();
         return;
@@ -562,6 +671,7 @@ function openMiLogin() {
 
 async function removeMi() {
   await server.miRemove().catch(() => {});
+  localStorage.removeItem(`${STORE}.cfg`);
   localStorage.removeItem(`${STORE}.mi.status`);
   localStorage.removeItem(`${STORE}.active`);
   location.reload();
@@ -723,9 +833,10 @@ async function showApp() {
     pollMi().then(() => loadMiJob().catch(() => {}));
   }
   new ResizeObserver(draw).observe($('map'));
+  watchGestures($('map'));
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      clearTimeout(pollTimer);
+      disconnect();
       clearTimeout(miPoll);
     } else {
       connect();
