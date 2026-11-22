@@ -24,7 +24,7 @@
 
 ## Development
 
-No build step; the server's only runtime dependency is `ws`. Node 26 (see `.nvmrc`).
+No build step and no runtime dependencies. Node 26 (see `.nvmrc`).
 
 ```sh
 npm ci

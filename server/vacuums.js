@@ -50,7 +50,7 @@ export class Refused extends Error {
   }
 }
 
-// api.js builds requests for the relay; here they go straight into the relay function.
+// api.js addresses Roborock as /rest/<host>/<path>; functions/rest sends that on.
 useTransport((path, init) => {
   const url = new URL(path, 'http://localhost');
   return rest({
@@ -80,7 +80,7 @@ function brokerSocket(host, port) {
   return ws;
 }
 
-// The Xiaomi modules' transport (see xiaomi.js), without the relay.
+// The Xiaomi modules' transport (see xiaomi.js).
 async function miHttp(url, { method = 'GET', query, form, cookies = {}, headers = {}, agent } = {}) {
   const u = new URL(url);
   if (!MI_HOST.test(u.host)) throw new Error('unexpected host');

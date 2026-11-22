@@ -2,7 +2,7 @@
   "name": "saugi",
   "version": "1.0.0",
   "private": true,
-  "description": "Roscoe: a fast Roborock vacuum remote as a PWA - start, pause, go home, live map. Static files plus a small Node relay.",
+  "description": "Roscoe: a fast Roborock vacuum remote as a PWA - start, pause, go home, live map. Static files plus a small Node service.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -18,8 +18,5 @@
   },
   "engines": {
     "node": ">=26"
-  },
-  "dependencies": {
-    "ws": "^8.23.0"
   }
 }

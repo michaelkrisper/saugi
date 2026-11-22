@@ -17,8 +17,7 @@ import {
 const TIMEOUT_MS = 10000;
 
 export class Robot {
-  // `open(host, port)`: how the server reaches the broker (see MqttClient); a browser
-  // goes through the relay.
+  // `open(host, port)` gives the connection to the broker (see MqttClient).
   constructor(rriot, device, open) {
     this.open = open;
     this.rriot = rriot;
@@ -34,9 +33,7 @@ export class Robot {
     const broker = new URL(r.m.replace(/^ssl:/, 'https:'));
     const user = md5hex(`${u}:${k}`).slice(2, 10);
     const port = Number(broker.port) || 8883;
-    const relay = () =>
-      `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/mqtt?host=${broker.hostname}&port=${port}`;
-    this.mqtt = new MqttClient(this.open ? () => this.open(broker.hostname, port) : relay(), {
+    this.mqtt = new MqttClient(() => this.open(broker.hostname, port), {
       clientId: user + md5hex(crypto.getRandomValues(new Uint8Array(8))).slice(0, 8),
       username: user,
       password: md5hex(`${s}:${k}`).slice(16),

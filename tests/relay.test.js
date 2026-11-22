@@ -1,9 +1,8 @@
-// The REST relay must only reach Roborock hosts and only forward the headers
+// The REST function must only reach Roborock hosts and only forward the headers
 // the API needs.
 
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { onRequest as onMiRequest } from '../functions/mi/[[path]].js';
 import { onRequest } from '../functions/rest/[[path]].js';
 import { MI_HOST, MQTT_HOST, REST_HOST } from '../shared/relay.js';
 
@@ -148,7 +147,7 @@ test('whatever the upstream host sends is labelled JSON and cannot run as a page
   assert.equal(res.headers.get('Content-Security-Policy'), "sandbox; default-src 'none'");
 });
 
-test('the Xiaomi relay reaches only Xiaomi cloud hosts', async () => {
+test('only Xiaomi cloud hosts are reached', () => {
   for (const host of [
     'account.xiaomi.com',
     'api.io.mi.com',
@@ -169,49 +168,4 @@ test('the Xiaomi relay reaches only Xiaomi cloud hosts', async () => {
     'mi.com',
   ])
     assert.ok(!MI_HOST.test(host), host);
-  globalThis.fetch = () => assert.fail('must not fetch');
-  const res = await onMiRequest({
-    request: new Request('https://roscoe.krisperapps.de/mi/evil.com/x'),
-    params: { path: ['evil.com', 'x'] },
-  });
-  assert.equal(res.status, 403);
-});
-
-test('the Xiaomi relay passes cookies in and hands redirects and cookies back', async () => {
-  let seen;
-  globalThis.fetch = async (url, init) => {
-    seen = { url, init };
-    const headers = new Headers({
-      Location: 'https://sts.api.io.mi.com/sts?x=1',
-      'extension-pragma': '{"ssecurity":"s"}',
-    });
-    headers.append('Set-Cookie', 'serviceToken=abc=; Path=/; HttpOnly');
-    headers.append('Set-Cookie', 'old=EXPIRED; Path=/');
-    return new Response(null, { status: 302, headers });
-  };
-  const request = new Request('https://roscoe.krisperapps.de/mi/account.xiaomi.com/pass/x', {
-    headers: {
-      'x-mi-cookie': 'userId=1; deviceId=abc',
-      'x-mi-agent': 'agent APP/x',
-      'x-relay-query': 'a=1',
-      Authorization: 'no',
-    },
-  });
-  const res = await onMiRequest({ request, params: { path: ['account.xiaomi.com', 'pass', 'x'] } });
-
-  assert.equal(seen.url, 'https://account.xiaomi.com/pass/x?a=1');
-  assert.equal(seen.init.redirect, 'manual');
-  assert.deepEqual(Object.fromEntries(seen.init.headers), {
-    cookie: 'userId=1; deviceId=abc',
-    'user-agent': 'agent APP/x',
-  });
-  assert.equal(res.status, 200);
-  assert.equal(res.headers.get('x-mi-status'), '302');
-  assert.deepEqual(JSON.parse(res.headers.get('x-mi-headers')), {
-    location: 'https://sts.api.io.mi.com/sts?x=1',
-    'extension-pragma': '{"ssecurity":"s"}',
-  });
-  assert.deepEqual(JSON.parse(res.headers.get('x-mi-set-cookie')), { serviceToken: 'abc=' });
-  assert.equal(res.headers.get('Content-Type'), 'application/octet-stream');
-  assert.equal(res.headers.get('Content-Security-Policy'), "sandbox; default-src 'none'");
 });

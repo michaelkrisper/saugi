@@ -1,10 +1,10 @@
 // Access by code word, and where the server keeps the vacuums' sign-in.
 //
-// With SITE_CODE set, /api and the relays answer only to a browser that has sent the
-// code word once (POST /api/unlock); it then holds a cookie derived from the code
-// word, so changing the word locks everyone out. The sign-in (server/vacuums.js) lies
-// in DATA_DIR/config.json and never leaves the server. Without SITE_CODE there is no
-// /api (the app says so) and the relays are open as before.
+// With SITE_CODE set, /api answers only to a browser that has sent the code word
+// once (POST /api/unlock); it then holds a cookie derived from the code word, so
+// changing the word locks everyone out. The sign-in (server/vacuums.js) lies in
+// DATA_DIR/config.json and never leaves the server. Without SITE_CODE there is no
+// /api (the app says so).
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -46,7 +46,7 @@ export function createAccess({ code = process.env.SITE_CODE, dir = process.env.D
   const cookie = (value, age) =>
     `${COOKIE}=${value}; Path=/; Max-Age=${age}; HttpOnly; Secure; SameSite=Strict`;
 
-  /** Whether the request may use the relays and the shared sign-in. */
+  /** Whether the request carries the code word's cookie. */
   const allowed = (headers) => {
     if (!token) return true;
     const sent = `; ${headers.cookie ?? ''}`.split(`; ${COOKIE}=`)[1]?.split(';')[0] ?? '';

@@ -23,7 +23,7 @@ jobs:
       - run: npm ci
       - run: npm run check
 
-  # The own server (https://roscoe.krisperapps.de/): Caddy serves public/, Node the relays.
+  # The own server (https://roscoe.krisperapps.de/): Caddy serves public/, Node the api.
   # Only commits that got a version tag: a re-run of an older run deploys nothing.
   # The key may only write into the app's folder there; the server restarts the
   # app once .version changes.
@@ -58,9 +58,7 @@ jobs:
           chmod 600 ~/.ssh/deploy
           echo 'krisperapps.de ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMchrlhQI1OFJ2cEfQosiydiSPg498c/+Mggebk+zVLO' > ~/.ssh/known_hosts
           mkdir _app
-          cp -r public functions server shared package.json package-lock.json _app/
-          # There is no npm on the server side of the deploy: ship the one runtime package (ws).
-          npm ci --omit=dev --ignore-scripts --prefix _app
+          cp -r public functions server shared package.json _app/
           rsync -rtz --delete --exclude=/.version -e 'ssh -i ~/.ssh/deploy' _app/ deploy@krisperapps.de:./
           # Last, and written in place: this is what the server watches.
           echo "$VERSION" > .version
@@ -85,18 +83,12 @@ jobs:
           check /js/app.js 200
           curl -fsS --max-time 20 "$live/js/version.js" | grep -F "'${VERSION#v}'"
           # The service is up and locked: without the code word's cookie (SITE_CODE in
-          # /etc/krisperapps/saugi.env) neither the api nor a relay answers.
+          # /etc/krisperapps/saugi.env) the api does not answer. The relays are gone.
           check /api/state 401
           check /api/rr/status 401
-          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 401
-          check '/mqtt?host=example.com&port=8883' 403
-          check /rest/euiot.roborock.com/ 401
-          check /rest/euiot.roborock.com/ 403 -H 'Origin: https://example.com'
-          # A handshake from this site is locked too, one from elsewhere is refused outright.
-          upgrade=(-H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13'
-            -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' --http1.1 --max-time 3)
-          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 401 "${upgrade[@]}" -H "Origin: $live"
-          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 403 "${upgrade[@]}" -H 'Origin: https://example.com'
+          check /api/unlock 403 -X POST -H 'Origin: https://example.com'
+          check /rest/euiot.roborock.com/ 404
+          check '/mqtt?host=mqtt-eu-3.roborock.com&port=8883' 404
 
   # Tags every tested commit on main with the next patch version (vX.Y.Z).
   version:

@@ -8,8 +8,7 @@ import { MqttClient } from '../public/js/mqtt.js';
 class FakeSocket {
   static OPEN = 1;
   static last = null;
-  constructor(url) {
-    this.url = url;
+  constructor() {
     this.sent = [];
     this.readyState = 0;
     FakeSocket.last = this;
@@ -40,7 +39,7 @@ let client;
 beforeEach(() => {
   realWebSocket = globalThis.WebSocket;
   globalThis.WebSocket = FakeSocket;
-  client = new MqttClient('ws://relay/mqtt', {
+  client = new MqttClient(() => new FakeSocket(), {
     clientId: 'cid',
     username: 'user',
     password: 'pw',

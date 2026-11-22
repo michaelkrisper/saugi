@@ -1,5 +1,4 @@
-// Per-client limits for the relays: without them anyone could drive Roborock's
-// API from the server's address until Roborock blocks it.
+// Per-client limits for the api: guesses of the code word, sign-in steps, polling.
 
 /**
  * Token bucket per key: `capacity` requests at once, refilled evenly over

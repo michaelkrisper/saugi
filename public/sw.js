@@ -1,4 +1,4 @@
-// App shell offline-first so the UI paints instantly; relays are never cached.
+// App shell offline-first so the UI paints instantly; the api is never cached.
 // Two caches: the app shell and the icons (most of the bytes). On deploy, CI
 // replaces the "dev" in each name with a content hash of that cache's files
 // (scripts/stamp-sw.mjs), so a cache gets a new name exactly when one of its
@@ -54,7 +54,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  if (/^\/(rest|mi|api)\//.test(url.pathname) || url.pathname === '/mqtt') return;
+  if (url.pathname.startsWith('/api/')) return;
   const asset = ASSETS.includes(url.pathname);
   e.respondWith(
     caches.open(asset ? ASSETS_CACHE : SHELL_CACHE).then(async (cache) => {

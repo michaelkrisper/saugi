@@ -2,7 +2,7 @@
 // reached: the sign-in handed over is made up, and only calls that need none are made.
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -45,19 +45,18 @@ const SIGN_IN = {
   },
 };
 
-test('without a code word there is no api and the relays are open', async () => {
+test('without a code word there is no api', async () => {
   const call = await start({ code: '', dir: undefined });
   assert.equal((await call('/api/state')).status, 404);
-  assert.equal((await call('/mi/evil.com/x')).status, 403);
 });
 
-test('the code word opens the api and the relays', async () => {
+test('the code word opens the api', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'saugi-access-'));
+  closers.push(() => rmSync(dir, { recursive: true, force: true }));
   const call = await start({ code: 'open sesame', dir });
   assert.equal((await call('/')).status, 200);
-  for (const path of ['/api/state', '/api/rr/status', '/mi/evil.com/x', '/rest/evil.com/x'])
+  for (const path of ['/api/state', '/api/rr/status', '/api/rr/map', '/api/mi/status'])
     assert.equal((await call(path)).status, 401, path);
-  assert.equal((await call('/mqtt?host=mqtt-eu-3.roborock.com&port=8883')).status, 401);
   assert.equal((await call('/api/state', { cookie: 'roscoe_access=nope' })).status, 401);
   assert.equal((await call('/api/adopt', { method: 'POST', body: SIGN_IN })).status, 401);
 
@@ -68,8 +67,6 @@ test('the code word opens the api and the relays', async () => {
   assert.match(set, /^roscoe_access=[0-9a-f]{64}; Path=\/; Max-Age=\d+; HttpOnly; Secure; SameSite=Strict$/);
   const cookie = set.split(';')[0];
 
-  // Past the gate the relay's own allowlist answers.
-  assert.equal((await call('/mi/evil.com/x', { cookie })).status, 403);
   assert.deepEqual(await (await call('/api/state', { cookie })).json(), { rr: null, rooms: {}, mi: null });
   assert.equal((await call('/api/rr/status', { cookie })).status, 409);
   assert.equal((await call('/api/mi/status', { cookie })).status, 409);
