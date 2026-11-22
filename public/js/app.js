@@ -329,7 +329,7 @@ function drawMi(ctx, P) {
   if (!miMap.robot) return;
   const [x, y] = at(miMap.robot.x / FIELD_MM, miMap.robot.y / FIELD_MM);
   ctx.fillStyle = '#fff';
-  ctx.strokeStyle = '#ff9d3c';
+  ctx.strokeStyle = '#000';
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(x, y, 7, 0, 2 * Math.PI);
@@ -488,7 +488,7 @@ async function loadMiMap() {
     if (fit) {
       const img = new ImageData(SIZE, SIZE);
       for (let i = 0; i < SIZE * SIZE; i++) {
-        if (lite.fields[i] === FLOOR) img.data.set([255, 157, 60, 90], i * 4);
+        if (lite.fields[i] === FLOOR) img.data.set([0, 0, 0, 120], i * 4);
       }
       canvas.getContext('2d').putImageData(img, 0, 0);
     }
